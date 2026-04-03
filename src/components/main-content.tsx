@@ -425,7 +425,7 @@ export function MainContent({
           <div className="space-y-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-3 justify-start">
               <Brain className="h-5 w-5 text-primary" />
-              <span>Extract with Ollama on this machine using local models</span>
+              <span>Extract with cloud AI so teammates can use the app online</span>
             </div>
             <div className="flex items-center gap-3 justify-start">
               <BarChart3 className="h-5 w-5 text-primary" />
@@ -617,7 +617,7 @@ export function MainContent({
                 />
               </div>
               <div className="mt-6 text-xs text-muted-foreground">
-                <p>PDFs are parsed on this device; extraction uses Ollama locally • Your content stays on this device</p>
+                <p>PDFs are parsed in the browser; AI extraction runs through the app&apos;s cloud backend</p>
               </div>
             </div>
           </Card>

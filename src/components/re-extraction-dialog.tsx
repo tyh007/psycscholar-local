@@ -163,7 +163,7 @@ export function ReExtractionDialog({
                 <span className="text-sm font-medium">AI Not Available</span>
               </div>
               <p className="text-xs text-orange-600 mt-1">
-                AI extraction is currently unavailable. Please check your Ollama connection.
+                AI extraction is currently unavailable. Please check the cloud AI configuration for this deployment.
               </p>
             </Card>
           )}

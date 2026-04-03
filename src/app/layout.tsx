@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "PsycScholar",
-  description: "Local literature analysis with Ollama and structured extraction.",
+  description: "Cloud-enabled literature analysis with structured extraction for psychology papers.",
 };
 
 export default function RootLayout({

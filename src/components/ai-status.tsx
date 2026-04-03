@@ -86,7 +86,7 @@ export function AIStatusIndicator({
           <div className="flex items-center gap-2">
             {isAvailable && (
               <Badge variant="secondary" className="text-xs">
-                Local model
+                Cloud AI
               </Badge>
             )}
             <Button
@@ -154,7 +154,7 @@ export function AIStatusIndicator({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Server:</span>
-                  <span>localhost:11434</span>
+                  <span>/api/ai</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Models Available:</span>
@@ -192,9 +192,9 @@ export function AIStatusIndicator({
                 <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
                 <div className="font-medium mb-1">Troubleshooting</div>
                 <ul className="space-y-1">
-                  <li>• Check that Ollama is running (default <code className="bg-background px-1 rounded">localhost:11434</code>)</li>
-                  <li>• Pull a model in a terminal: <code className="bg-background px-1 rounded">ollama pull &lt;model-name&gt;</code></li>
-                  <li>• Expand the card above and choose an installed model from the list</li>
+                  <li>• Check that the deployment has a valid <code className="bg-background px-1 rounded">GEMINI_API_KEY</code> configured</li>
+                  <li>• Make sure the selected Gemini model is allowed for that project and quota</li>
+                  <li>• Retry the connection after updating the server environment</li>
                 </ul>
               </div>
             )}

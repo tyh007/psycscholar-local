@@ -453,15 +453,12 @@ export default function Home() {
           </DialogHeader>
           <div className="space-y-3 text-sm text-muted-foreground">
             <p>
-              PDFs and extraction results are stored in this browser (IndexedDB). AI runs via{' '}
-              <strong className="text-foreground">Ollama</strong> on this machine (
-              <code className="rounded bg-muted px-1 py-0.5 text-xs">http://localhost:11434</code>
-              ); by default, paper content is not sent to the cloud.
+              PDFs and extraction results are stored in this browser (IndexedDB). AI extraction now runs through the
+              app&apos;s server-side cloud model, so the public deployment can process papers without local Ollama.
             </p>
             <p>
-              Start Ollama and pull the models you need (in a terminal:{' '}
-              <code className="text-xs">ollama pull &lt;model-name&gt;</code>
-              ), then expand AI status in the toolbar and pick the model to use from the list.
+              The deployment needs a server-side Gemini API key and model configured. Once those environment variables
+              are set, users can upload PDFs and run extraction directly from the hosted app.
             </p>
             <p>
               Adjust <strong className="text-foreground">Detail level</strong> before re-extracting or adding custom columns; newly uploaded papers use the current pipeline settings.

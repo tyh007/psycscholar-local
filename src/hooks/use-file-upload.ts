@@ -64,7 +64,7 @@ export function useFileUpload() {
       console.log('Starting AI extraction for:', file.name)
       
       try {
-        // 使用统一的 AI 提取服务 (自动回退: Together AI > Ollama > 规则)
+        // 使用统一的云端 AI 提取服务
         const { data: extracted, method } = await aiExtractionService.extractWithFallback(
           extractedContent.fullText
         )

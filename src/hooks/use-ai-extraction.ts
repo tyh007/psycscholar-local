@@ -28,7 +28,7 @@ export function useAIExtraction() {
     isAvailable: false,
     isChecking: true,
     availableModels: [],
-    currentModel: 'qwen3.5:latest'
+    currentModel: 'gemini-2.0-flash'
   })
   
   const [extractionJobs, setExtractionJobs] = useState<ExtractionJob[]>([])
@@ -48,14 +48,14 @@ export function useAIExtraction() {
         isAvailable: check.available,
         isChecking: false,
         availableModels: check.models,
-        currentModel: check.models.find(m => m.includes('qwen')) || check.models[0] || 'qwen3.5:latest',
+        currentModel: check.models[0] || 'gemini-2.0-flash',
         error: check.error
       })
       
       console.log('AI state updated:', {
         isAvailable: check.available,
         models: check.models,
-        currentModel: check.models.find(m => m.includes('qwen')) || check.models[0] || 'qwen3.5:latest'
+        currentModel: check.models[0] || 'gemini-2.0-flash'
       })
     } catch (error) {
       console.error('AI availability check failed:', error)
