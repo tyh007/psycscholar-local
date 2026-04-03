@@ -170,6 +170,26 @@ export class OllamaClient {
     }
   }
 
+  async generateText(
+    prompt: string,
+    model?: string,
+    options?: OllamaRequest['options']
+  ): Promise<string> {
+    const response = await this.chat({
+      model: model || this.defaultModel,
+      messages: [
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      stream: false,
+      options
+    })
+
+    return response.message.content
+  }
+
   getDefaultModel(): string {
     return this.defaultModel
   }
