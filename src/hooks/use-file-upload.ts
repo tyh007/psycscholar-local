@@ -80,7 +80,7 @@ export function useFileUpload() {
         console.error('AI extraction failed:', error)
         await db.updatePaper(paperId, {
           processingStatus: 'completed',
-          errorMessage: 'Extraction failed'
+          errorMessage: error instanceof Error ? error.message : 'Extraction failed'
         })
         return { ...paper, id: paperId }
       }

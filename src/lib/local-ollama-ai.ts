@@ -47,6 +47,60 @@ function parseExtractionResponse(parsed: Record<string, unknown>): ExtractedData
   }
 }
 
+function extractAbstractBlock(text: string) {
+  const match = text.match(/abstract\s*[:\-]?\s*\n?(.*?)(?=\n\s*(?:keywords|introduction|1\.|i\.|background|method))/is)
+  if (!match?.[1]) return undefined
+  const cleaned = match[1].replace(/\s+/g, ' ').trim()
+  return cleaned.length >= 120 ? cleaned.slice(0, 420) : undefined
+}
+
+function looksLikeFrontMatter(paragraph: string) {
+  const lower = paragraph.toLowerCase()
+  return (
+    /@/.test(paragraph) ||
+    /(university|department|school|college|received|accepted|published|copyright|permission to make)/.test(lower) ||
+    /^[A-Z][A-Za-z .,&:-]{0,120}$/.test(paragraph)
+  )
+}
+
+function isUsableSectionParagraph(paragraph: string) {
+  const lower = paragraph.toLowerCase()
+  if (/@/.test(paragraph)) return false
+  if (/(university|department|school|college)/.test(lower)) return false
+  if (paragraph.split(/\s+/).length < 18) return false
+  return true
+}
+
+export function extractPaperWithRules(text: string): ExtractedData {
+  const paragraphs = text
+    .split(/\n\n+/)
+    .map(paragraph => paragraph.trim())
+    .filter(paragraph => paragraph.length > 80)
+    .filter(paragraph => !looksLikeFrontMatter(paragraph))
+
+  const abstract = extractAbstractBlock(text)
+
+  const findSection = (keywords: string[]) => {
+    for (const paragraph of paragraphs.slice(0, 40)) {
+      const lower = paragraph.toLowerCase()
+      if (keywords.some(keyword => lower.includes(keyword)) && isUsableSectionParagraph(paragraph)) {
+        return paragraph.slice(0, 420)
+      }
+    }
+    return 'Not mentioned'
+  }
+
+  return {
+    background: abstract || findSection(['background', 'introduction', 'literature', 'context']),
+    theory: findSection(['theory', 'theoretical', 'hypothesis', 'framework']),
+    methodology: findSection(['method', 'participants', 'procedure', 'design']),
+    measures: findSection(['measure', 'instrument', 'scale', 'assessment']),
+    results: findSection(['result', 'finding', 'analysis', 'significant']),
+    implications: findSection(['implication', 'discussion', 'conclusion']),
+    limitations: findSection(['limitation', 'future research', 'constraint'])
+  }
+}
+
 async function chatForJson(
   systemPrompt: string,
   userPrompt: string,
@@ -70,7 +124,17 @@ async function chatForJson(
   })
 
   const cleaned = PromptBuilder.sanitizeResponse(response.message.content)
-  const parsed = JSON.parse(cleaned) as Record<string, unknown>
+  let parsed: Record<string, unknown>
+
+  try {
+    parsed = JSON.parse(cleaned) as Record<string, unknown>
+  } catch (error) {
+    const preview = response.message.content.slice(0, 300)
+    throw new Error(
+      `Ollama returned non-JSON output. Preview: ${preview}${preview.length >= 300 ? '...' : ''}`
+    )
+  }
+
   return {
     parsed,
     model: response.model || resolvedModel
