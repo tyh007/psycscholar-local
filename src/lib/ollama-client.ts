@@ -7,6 +7,7 @@ export interface OllamaRequest {
   model: string
   messages: OllamaMessage[]
   stream?: boolean
+  format?: 'json' | Record<string, unknown>
   options?: {
     temperature?: number
     top_p?: number
@@ -144,6 +145,7 @@ export class OllamaClient {
           model: request.model || this.defaultModel,
           messages: request.messages,
           stream: request.stream || false,
+          ...(request.format ? { format: request.format } : {}),
           options: {
             temperature: 0.1,
             top_p: 0.9,

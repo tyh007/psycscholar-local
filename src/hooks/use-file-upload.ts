@@ -65,7 +65,11 @@ export function useFileUpload() {
       try {
         // 使用统一的云端 AI 提取服务
         const { data: extracted, method } = await aiExtractionService.extractWithFallback(
-          extractedContent.fullText
+          extractedContent.fullText,
+          {
+            title: bibInfo.title || file.name.replace('.pdf', ''),
+            abstract: extractedContent.abstract
+          }
         )
         
         // 更新数据库

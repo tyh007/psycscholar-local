@@ -2,10 +2,13 @@ import { type ExtractedPaperData } from '@/lib/ai-extraction-types'
 import { extractPaperWithLocalOllama, extractPaperWithRules } from '@/lib/local-ollama-ai'
 
 class UnifiedExtractionService {
-  async extractWithFallback(text: string): Promise<{ data: ExtractedPaperData; method: string }> {
+  async extractWithFallback(
+    text: string,
+    context?: { title?: string; abstract?: string }
+  ): Promise<{ data: ExtractedPaperData; method: string }> {
     console.log('Trying local Ollama...')
     try {
-      const result = await extractPaperWithLocalOllama(text, 'brief')
+      const result = await extractPaperWithLocalOllama(text, 'brief', undefined, undefined, context)
       console.log('Local Ollama extraction successful')
       return { data: result.extractedData, method: `Ollama (${result.model})` }
     } catch (error) {
