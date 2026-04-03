@@ -107,7 +107,7 @@ async function apiFetch<T>(input: string, init?: RequestInit): Promise<T> {
   const data = (await response.json()) as JsonResult<T>
 
   if (!response.ok || data.success === false) {
-    throw new Error(data.error || 'Request failed')
+    throw new Error(data.error || `Request failed with status ${response.status}`)
   }
 
   return data as T

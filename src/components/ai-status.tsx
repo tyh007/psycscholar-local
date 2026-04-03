@@ -20,6 +20,7 @@ interface AIStatusIndicatorProps {
   isChecking: boolean
   availableModels?: string[]
   currentModel: string
+  baseUrl?: string
   error?: string
   onModelChange?: (model: string) => void
   onRetryConnection?: () => void
@@ -32,6 +33,7 @@ export function AIStatusIndicator({
   isChecking,
   availableModels,
   currentModel,
+  baseUrl,
   error,
   onModelChange,
   onRetryConnection,
@@ -53,9 +55,9 @@ export function AIStatusIndicator({
   }
 
   const getStatusText = () => {
-    if (isChecking) return 'Checking AI...'
-    if (isAvailable) return 'AI Ready'
-    return 'AI Unavailable'
+    if (isChecking) return 'Checking Ollama...'
+    if (isAvailable) return 'Ollama Ready'
+    return 'Ollama Unavailable'
   }
 
   const getConnectionIcon = () => {
@@ -86,7 +88,7 @@ export function AIStatusIndicator({
           <div className="flex items-center gap-2">
             {isAvailable && (
               <Badge variant="secondary" className="text-xs">
-                Cloud AI
+                Local Ollama
               </Badge>
             )}
             <Button
@@ -154,7 +156,7 @@ export function AIStatusIndicator({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Server:</span>
-                  <span>/api/ai</span>
+                  <span>{baseUrl || 'http://localhost:11434'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Models Available:</span>
@@ -192,9 +194,9 @@ export function AIStatusIndicator({
                 <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
                 <div className="font-medium mb-1">Troubleshooting</div>
                 <ul className="space-y-1">
-                  <li>• Check that the deployment has a valid <code className="bg-background px-1 rounded">GEMINI_API_KEY</code> configured</li>
-                  <li>• Make sure the selected Gemini model is allowed for that project and quota</li>
-                  <li>• Retry the connection after updating the server environment</li>
+                  <li>• Install and launch Ollama on this computer</li>
+                  <li>• Pull a model such as <code className="bg-background px-1 rounded">ollama pull qwen2.5:3b</code></li>
+                  <li>• For the hosted app, start Ollama with <code className="bg-background px-1 rounded">OLLAMA_ORIGINS=https://psycscholar-local.vercel.app ollama serve</code></li>
                 </ul>
               </div>
             )}
@@ -216,7 +218,7 @@ export function AIStatusBadge({ isAvailable, isChecking, className = '' }: AISta
     return (
       <Badge variant="secondary" className={`gap-1 ${className}`}>
         <Loader2 className="h-3 w-3 animate-spin" />
-        Checking AI
+        Checking Ollama
       </Badge>
     )
   }
@@ -225,16 +227,16 @@ export function AIStatusBadge({ isAvailable, isChecking, className = '' }: AISta
     return (
       <Badge variant="default" className={`gap-1 bg-green-600 hover:bg-green-700 ${className}`}>
         <CheckCircle className="h-3 w-3" />
-        AI Ready
+        Ollama Ready
       </Badge>
     )
   }
 
   return (
-    <Badge variant="destructive" className={`gap-1 ${className}`}>
-      <XCircle className="h-3 w-3" />
-      AI Offline
-    </Badge>
+      <Badge variant="destructive" className={`gap-1 ${className}`}>
+        <XCircle className="h-3 w-3" />
+      Ollama Offline
+      </Badge>
   )
 }
 

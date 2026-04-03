@@ -1,5 +1,12 @@
 import { PromptBuilder, type CustomFieldDefinition } from '@/lib/prompt-builder'
 import { type ExtractedData } from '@/lib/database'
+import {
+  extractCustomFieldWithLocalOllama,
+  extractPaperWithLocalOllama,
+  getLocalOllamaAvailability,
+  performCrossPaperAnalysisWithLocalOllama,
+  reExtractFieldsWithLocalOllama
+} from '@/lib/local-ollama-ai'
 
 export interface ExtractionProgress {
   paperId: string
@@ -26,40 +33,6 @@ export interface ExtractionResult {
   modelUsed?: string
 }
 
-type CloudAIRequest =
-  | {
-      action: 'availability'
-    }
-  | {
-      action: 'extractPaper'
-      paperText: string
-      detailLevel: 'brief' | 'detailed'
-      customFields?: CustomFieldDefinition[]
-    }
-  | {
-      action: 'extractCustomField'
-      paperText: string
-      customField: CustomFieldDefinition
-      detailLevel: 'brief' | 'detailed'
-    }
-  | {
-      action: 'reExtractFields'
-      paperText: string
-      existingExtraction: ExtractedData
-      fieldsToUpdate: string[]
-      detailLevel: 'brief' | 'detailed'
-    }
-  | {
-      action: 'crossPaperAnalysis'
-      papers: Array<{
-        title: string
-        authors: string
-        year: number
-        extractedData: ExtractedData
-      }>
-      analysisQuestion: string
-    }
-
 class AIExtractionService {
   private static instance: AIExtractionService
   private progressCallbacks: Map<string, (progress: ExtractionProgress) => void> = new Map()
@@ -71,34 +44,21 @@ class AIExtractionService {
     return AIExtractionService.instance
   }
 
-  private async callCloudAI<T>(body: CloudAIRequest): Promise<T> {
-    const response = await fetch('/api/ai', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
-    })
-
-    const data = await response.json()
-
-    if (!response.ok || data.success === false) {
-      throw new Error(data.error || 'Cloud AI request failed')
-    }
-
-    return data as T
-  }
-
   async checkModelAvailability(): Promise<{ available: boolean; models: string[]; error?: string }> {
     try {
-      return await this.callCloudAI<{ available: boolean; models: string[]; error?: string }>({
-        action: 'availability'
-      })
+      const result = await getLocalOllamaAvailability()
+      return {
+        available: result.available,
+        models: result.models,
+        error: result.available
+          ? undefined
+          : `Could not connect to Ollama at ${result.currentBaseUrl}. Make sure Ollama is running and at least one model is installed.`
+      }
     } catch (error) {
       return {
         available: false,
         models: [],
-        error: error instanceof Error ? error.message : 'Unknown error checking cloud AI availability'
+        error: error instanceof Error ? error.message : 'Unknown error checking local Ollama availability'
       }
     }
   }
@@ -114,7 +74,7 @@ class AIExtractionService {
     try {
       const availability = await this.checkModelAvailability()
       if (!availability.available) {
-        throw new Error(availability.error || 'Cloud AI is not available')
+        throw new Error(availability.error || 'Local Ollama is not available')
       }
 
       onProgress?.({
@@ -122,7 +82,7 @@ class AIExtractionService {
         fileName: 'current',
         status: 'extracting',
         progress: 15,
-        currentStep: 'Preparing paper for cloud extraction...'
+        currentStep: 'Preparing paper for local extraction...'
       })
 
       let lastError: Error | null = null
@@ -134,18 +94,15 @@ class AIExtractionService {
             fileName: 'current',
             status: 'extracting',
             progress: 45,
-            currentStep: `Running cloud extraction (attempt ${attempt}/${maxRetries})...`
+            currentStep: `Running local extraction (attempt ${attempt}/${maxRetries})...`
           })
 
-          const result = await this.callCloudAI<{
-            success: true
-            extractedData: ExtractedData
-          }>({
-            action: 'extractPaper',
+          const result = await extractPaperWithLocalOllama(
             paperText,
-            detailLevel: options.detailLevel,
-            customFields: options.customFields
-          })
+            options.detailLevel,
+            options.customFields,
+            options.model
+          )
 
           onProgress?.({
             paperId: 'current',
@@ -159,7 +116,7 @@ class AIExtractionService {
             success: true,
             extractedData: result.extractedData,
             processingTime: Date.now() - startTime,
-            modelUsed: availability.models[0] || 'cloud-ai'
+            modelUsed: result.model
           }
         } catch (error) {
           lastError = error instanceof Error ? error : new Error('Unknown extraction error')
@@ -198,7 +155,7 @@ class AIExtractionService {
     try {
       const availability = await this.checkModelAvailability()
       if (!availability.available) {
-        throw new Error(availability.error || 'Cloud AI is not available')
+        throw new Error(availability.error || 'Local Ollama is not available')
       }
 
       onProgress?.({
@@ -206,15 +163,15 @@ class AIExtractionService {
         fileName: 'current',
         status: 'extracting',
         progress: 50,
-        currentStep: `Extracting ${customField.name} with cloud AI...`
+        currentStep: `Extracting ${customField.name} with local Ollama...`
       })
 
-      const result = await this.callCloudAI<{ success: true; result: string }>({
-        action: 'extractCustomField',
+      const result = await extractCustomFieldWithLocalOllama(
         paperText,
         customField,
-        detailLevel: options.detailLevel
-      })
+        options.detailLevel,
+        options.model
+      )
 
       onProgress?.({
         paperId: 'current',
@@ -226,7 +183,7 @@ class AIExtractionService {
 
       return {
         success: true,
-        result: result.result.trim()
+        result: result.trim()
       }
     } catch (error) {
       onProgress?.({
@@ -261,16 +218,13 @@ class AIExtractionService {
         currentStep: 'Preparing targeted re-extraction...'
       })
 
-      const result = await this.callCloudAI<{
-        success: true
-        extractedData: ExtractedData
-      }>({
-        action: 'reExtractFields',
+      const result = await reExtractFieldsWithLocalOllama(
         paperText,
         existingExtraction,
         fieldsToUpdate,
-        detailLevel: options.detailLevel
-      })
+        options.detailLevel,
+        options.model
+      )
 
       onProgress?.({
         paperId: 'current',
@@ -283,7 +237,7 @@ class AIExtractionService {
       return {
         success: true,
         extractedData: result.extractedData,
-        modelUsed: options.model || 'cloud-ai'
+        modelUsed: result.model
       }
     } catch (error) {
       onProgress?.({
@@ -312,15 +266,14 @@ class AIExtractionService {
     analysisQuestion: string
   ): Promise<{ success: boolean; analysis?: string; error?: string }> {
     try {
-      const result = await this.callCloudAI<{ success: true; analysis: string }>({
-        action: 'crossPaperAnalysis',
+      const result = await performCrossPaperAnalysisWithLocalOllama(
         papers,
         analysisQuestion
-      })
+      )
 
       return {
         success: true,
-        analysis: result.analysis
+        analysis: result
       }
     } catch (error) {
       return {

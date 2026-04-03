@@ -202,6 +202,7 @@ interface MainContentProps {
     isChecking: boolean
     availableModels: string[]
     currentModel: string
+    baseUrl: string
     error?: string
   }
   globalDetailLevel?: number
@@ -479,6 +480,7 @@ export function MainContent({
                 isChecking={aiState.isChecking}
                 availableModels={aiState.availableModels || []}
                 currentModel={aiState.currentModel}
+                baseUrl={aiState.baseUrl}
                 error={aiState.error}
                 onModelChange={onAIModelChange}
                 onRetryConnection={onAIRetry}

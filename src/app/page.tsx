@@ -17,6 +17,7 @@ import { PSYCHOLOGY_CUSTOM_FIELDS } from '@/lib/prompt-builder'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DEFAULT_OLLAMA_SETTINGS } from '@/lib/ollama-settings'
 
 function dbCustomFieldToDef(row: CustomField): CustomFieldDefinition {
   return {
@@ -59,6 +60,7 @@ export default function Home() {
   const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null)
   const [projectCustomFields, setProjectCustomFields] = useState<CustomFieldDefinition[]>([])
   const [appSettingsOpen, setAppSettingsOpen] = useState(false)
+  const [ollamaBaseUrlInput, setOllamaBaseUrlInput] = useState(DEFAULT_OLLAMA_SETTINGS.baseUrl)
   const [viewMode, setViewMode] = useState<'library' | 'trash'>('library')
   const [trashCount, setTrashCount] = useState(0)
   const [sidebarWidth, setSidebarWidth] = useState(readInitialSidebarWidth)
@@ -68,6 +70,7 @@ export default function Home() {
     aiState,
     checkAIAvailability,
     setCurrentModel,
+    setBaseUrl,
     detailLevel,
     setDetailLevel,
     extractionJobs,
@@ -75,6 +78,10 @@ export default function Home() {
     extractFromPaper,
     extractCustomField
   } = useAIExtraction()
+
+  useEffect(() => {
+    setOllamaBaseUrlInput(aiState.baseUrl)
+  }, [aiState.baseUrl])
 
   const persistSidebarWidth = useCallback((w: number) => {
     setSidebarWidth(w)
@@ -555,19 +562,50 @@ export default function Home() {
       <Dialog open={appSettingsOpen} onOpenChange={setAppSettingsOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>PsycScholar Local</DialogTitle>
+            <DialogTitle>Local Ollama Setup</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 text-sm text-muted-foreground">
+          <div className="space-y-4 text-sm text-muted-foreground">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Ollama URL</label>
+              <Input
+                value={ollamaBaseUrlInput}
+                onChange={(event) => setOllamaBaseUrlInput(event.target.value)}
+                placeholder="http://localhost:11434"
+              />
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  onClick={async () => {
+                    setBaseUrl(ollamaBaseUrlInput)
+                    await checkAIAvailability()
+                    toast.success('Updated local Ollama settings')
+                  }}
+                >
+                  Save and recheck
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setOllamaBaseUrlInput(DEFAULT_OLLAMA_SETTINGS.baseUrl)}
+                >
+                  Reset
+                </Button>
+              </div>
+            </div>
             <p>
-              Projects, papers, and extraction results are now stored in a shared cloud database. AI extraction runs
-              through the app&apos;s server-side cloud model, so collaborators can use the same hosted workspace.
+              PsycScholar can call a local Ollama server directly from the browser, so each user can run extraction with their own local model and keep API keys out of the app.
             </p>
             <p>
-              The deployment needs server-side Supabase and Gemini environment variables configured. Once those are in
-              place, users can upload PDFs and run extraction directly from the hosted app.
+              Setup guide for new users:
             </p>
+            <ol className="list-decimal space-y-1 pl-5">
+              <li>Install Ollama from <code className="bg-muted px-1 rounded">ollama.com</code> or with Homebrew.</li>
+              <li>Pull a light model such as <code className="bg-muted px-1 rounded">ollama pull qwen2.5:3b</code>.</li>
+              <li>Run <code className="bg-muted px-1 rounded">ollama serve</code> locally. For the hosted app, use <code className="bg-muted px-1 rounded">OLLAMA_ORIGINS=https://psycscholar-local.vercel.app ollama serve</code>.</li>
+              <li>Open this dialog, confirm the Ollama URL, then choose a model from the AI status dropdown.</li>
+            </ol>
             <p>
-              Adjust <strong className="text-foreground">Detail level</strong> before re-extracting or adding custom columns; newly uploaded papers use the current pipeline settings.
+              Adjust <strong className="text-foreground">Detail level</strong> before re-extracting or adding custom columns; newly uploaded papers use the currently selected local model.
             </p>
           </div>
         </DialogContent>

@@ -1,12 +1,14 @@
 import { useState, useCallback, useEffect } from 'react'
 import { aiExtractionService, type ExtractionOptions, type ExtractionProgress } from '@/lib/ai-extraction'
 import { PSYCHOLOGY_CUSTOM_FIELDS, type CustomFieldDefinition } from '@/lib/prompt-builder'
+import { DEFAULT_OLLAMA_SETTINGS, readOllamaSettings, saveOllamaSettings } from '@/lib/ollama-settings'
 
 export interface AIExtractionState {
   isAvailable: boolean
   isChecking: boolean
   availableModels: string[]
   currentModel: string
+  baseUrl: string
   error?: string
 }
 
@@ -24,11 +26,13 @@ export interface ExtractionJob {
 }
 
 export function useAIExtraction() {
+  const initialSettings = readOllamaSettings()
   const [aiState, setAIState] = useState<AIExtractionState>({
     isAvailable: false,
     isChecking: true,
     availableModels: [],
-    currentModel: 'gemini-2.0-flash'
+    currentModel: initialSettings.model || DEFAULT_OLLAMA_SETTINGS.model,
+    baseUrl: initialSettings.baseUrl || DEFAULT_OLLAMA_SETTINGS.baseUrl
   })
   
   const [extractionJobs, setExtractionJobs] = useState<ExtractionJob[]>([])
@@ -43,19 +47,24 @@ export function useAIExtraction() {
       console.log('Checking AI availability...')
       const check = await aiExtractionService.checkModelAvailability()
       console.log('AI availability check result:', check)
+      const savedSettings = readOllamaSettings()
+      const preferredModel = check.models.includes(savedSettings.model)
+        ? savedSettings.model
+        : (check.models[0] || savedSettings.model)
       
       setAIState({
         isAvailable: check.available,
         isChecking: false,
         availableModels: check.models,
-        currentModel: check.models[0] || 'gemini-2.0-flash',
+        currentModel: preferredModel,
+        baseUrl: savedSettings.baseUrl,
         error: check.error
       })
       
       console.log('AI state updated:', {
         isAvailable: check.available,
         models: check.models,
-        currentModel: check.models[0] || 'gemini-2.0-flash'
+        currentModel: preferredModel
       })
     } catch (error) {
       console.error('AI availability check failed:', error)
@@ -69,7 +78,13 @@ export function useAIExtraction() {
   }, [])
 
   const setCurrentModel = useCallback((model: string) => {
+    saveOllamaSettings({ model })
     setAIState(prev => ({ ...prev, currentModel: model }))
+  }, [])
+
+  const setBaseUrl = useCallback((baseUrl: string) => {
+    const settings = saveOllamaSettings({ baseUrl })
+    setAIState(prev => ({ ...prev, baseUrl: settings.baseUrl }))
   }, [])
 
   // Extract data from paper text
@@ -388,6 +403,7 @@ export function useAIExtraction() {
     aiState,
     checkAIAvailability,
     setCurrentModel,
+    setBaseUrl,
     
     // Extraction Jobs
     extractionJobs,

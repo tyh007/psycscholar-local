@@ -423,16 +423,24 @@ export class PDFProcessor {
 
   private static extractAuthorsFromLines(lines: string[], titleEndIndex: number): string | undefined {
     const startIndex = Math.max(0, titleEndIndex + 1)
+    const candidateLines: string[] = []
 
     for (const line of lines.slice(startIndex, startIndex + 6)) {
       const normalized = this.normalizePDFText(line)
       if (!normalized) continue
-      if (/(abstract|decision research|university|department|school|college|institute|journal|doi)/i.test(normalized)) {
+      if (/(abstract|journal|doi|keywords|introduction)/i.test(normalized)) {
         break
       }
+
+      if (/@/.test(normalized) || /(university|department|school|college|institute|laboratory|lab|berkeley|london|barcelona|spain|uk|usa)/i.test(normalized)) {
+        break
+      }
+
+      candidateLines.push(normalized)
+
       if (this.looksLikeAuthorLine(normalized)) {
-        const authorNames = this.extractAuthorNames(normalized)
-        if (authorNames.length > 0) {
+        const authorNames = this.extractAuthorNames(candidateLines.join(', '))
+        if (authorNames.length >= 2) {
           return authorNames.join('; ')
         }
       }
@@ -454,6 +462,7 @@ export class PDFProcessor {
     searchArea = searchArea
       .replace(/\babstract\b[\s\S]*$/i, ' ')
       .replace(/\bdoi\b[\s\S]*$/i, ' ')
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, ' ')
       .replace(
         /\b(?:university|department|faculty|school|college|research|institute|hospital|journal|received|accepted|published)\b[\s\S]*$/i,
         ' '
@@ -462,7 +471,7 @@ export class PDFProcessor {
       .trim()
 
     const authorNames = this.extractAuthorNames(searchArea)
-    if (authorNames.length > 0) {
+    if (authorNames.length >= 2) {
       return authorNames.join('; ')
     }
 
@@ -471,8 +480,9 @@ export class PDFProcessor {
 
   private static extractAuthorNames(value: string): string[] {
     const truncated = this.normalizePDFText(value)
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, ' ')
       .replace(
-        /\b(?:decision research|university|department|faculty|school|college|research|institute|hospital|journal|received|accepted|published|abstract|doi)\b[\s\S]*$/i,
+        /\b(?:decision research|university|department|faculty|school|college|research|institute|hospital|journal|received|accepted|published|abstract|doi|london|barcelona|spain|berkeley|usa|uk|chi)\b[\s\S]*$/i,
         ' '
       )
       .replace(/\s+/g, ' ')
@@ -579,7 +589,7 @@ export class PDFProcessor {
     if (parts.length !== 2) return false
 
     const lower = normalized.toLowerCase()
-    if (/(research|university|department|school|journal|study|charity|child|need)/.test(lower)) {
+    if (/(research|university|department|school|journal|study|charity|child|need|advisor|voting|teammate|institutional|authority|information|structures|bounded|rational|human|groups|barcelona|spain|london|berkeley)/.test(lower)) {
       return false
     }
 

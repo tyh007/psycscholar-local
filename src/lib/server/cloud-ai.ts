@@ -2,7 +2,6 @@ import { type ExtractedData } from '@/lib/database'
 import { PromptBuilder, type CustomFieldDefinition } from '@/lib/prompt-builder'
 
 const DEFAULT_MODEL = 'gemini-2.0-flash'
-const FALLBACK_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash']
 const REQUEST_TIMEOUT_MS = 45000
 const BASE_FIELDS = [
   'background',
@@ -29,6 +28,18 @@ export interface CrossPaperInput {
   extractedData: ExtractedData
 }
 
+export class CloudAIError extends Error {
+  status?: number
+  retryable: boolean
+
+  constructor(message: string, options?: { status?: number; retryable?: boolean }) {
+    super(message)
+    this.name = 'CloudAIError'
+    this.status = options?.status
+    this.retryable = options?.retryable ?? false
+  }
+}
+
 function getApiKey() {
   return process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || ''
 }
@@ -43,6 +54,60 @@ function normalizeJsonResponse(text: string) {
 
 function slicePaperText(text: string, maxChars = 18000) {
   return text.slice(0, maxChars)
+}
+
+function extractWithRules(text: string): ExtractedData {
+  const paragraphs = text
+    .split(/\n\n+/)
+    .map(p => p.trim())
+    .filter(p => p.length > 80)
+    .filter(p => !looksLikeFrontMatter(p))
+
+  const abstract = extractAbstractBlock(text)
+
+  const findSection = (keywords: string[]) => {
+    for (const para of paragraphs.slice(0, 40)) {
+      const lower = para.toLowerCase()
+      if (keywords.some(keyword => lower.includes(keyword)) && isUsableSectionParagraph(para)) {
+        return para.slice(0, 420)
+      }
+    }
+    return 'Not mentioned'
+  }
+
+  return {
+    background: abstract || findSection(['background', 'introduction', 'literature', 'context']),
+    theory: findSection(['theory', 'theoretical', 'hypothesis', 'framework']),
+    methodology: findSection(['method', 'participants', 'procedure', 'design']),
+    measures: findSection(['measure', 'instrument', 'scale', 'assessment']),
+    results: findSection(['result', 'finding', 'analysis', 'significant']),
+    implications: findSection(['implication', 'discussion', 'conclusion']),
+    limitations: findSection(['limitation', 'future research', 'constraint'])
+  }
+}
+
+function extractAbstractBlock(text: string) {
+  const match = text.match(/abstract\s*[:\-]?\s*\n?(.*?)(?=\n\s*(?:keywords|introduction|1\.|i\.|background|method))/is)
+  if (!match?.[1]) return undefined
+  const cleaned = match[1].replace(/\s+/g, ' ').trim()
+  return cleaned.length >= 120 ? cleaned.slice(0, 420) : undefined
+}
+
+function looksLikeFrontMatter(paragraph: string) {
+  const lower = paragraph.toLowerCase()
+  return (
+    /@/.test(paragraph) ||
+    /(university|department|school|college|barcelona|spain|berkeley|london|received|accepted|published|copyright|permission to make)/.test(lower) ||
+    /^[A-Z][A-Za-z .,&:-]{0,120}$/.test(paragraph)
+  )
+}
+
+function isUsableSectionParagraph(paragraph: string) {
+  const lower = paragraph.toLowerCase()
+  if (/@/.test(paragraph)) return false
+  if (/(university|department|school|college|barcelona|spain|berkeley|london)/.test(lower)) return false
+  if (paragraph.split(/\s+/).length < 18) return false
+  return true
 }
 
 async function callGemini({
@@ -65,8 +130,8 @@ async function callGemini({
     throw new Error('Cloud AI is not configured. Set GEMINI_API_KEY in the server environment.')
   }
 
-  const modelCandidates = [model, ...FALLBACK_MODELS.filter(candidate => candidate !== model)]
-  let lastError: Error | null = null
+  const modelCandidates = [model]
+  let lastError: CloudAIError | null = null
 
   for (const modelName of modelCandidates) {
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -108,8 +173,14 @@ async function callGemini({
 
         if (!response.ok) {
           const errorText = await response.text()
-          const retryable = response.status === 429 || response.status >= 500
-          lastError = new Error(`Gemini error (${modelName}, attempt ${attempt}): ${response.status} - ${errorText}`)
+          const lower = errorText.toLowerCase()
+          const retryable =
+            (response.status === 429 && !lower.includes('limit: 0') && !lower.includes('perday')) ||
+            response.status >= 500
+          lastError = new CloudAIError(
+            `Gemini error (${modelName}, attempt ${attempt}): ${response.status} - ${errorText}`,
+            { status: response.status, retryable }
+          )
           if (retryable && attempt < 3) {
             await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
             continue
@@ -129,12 +200,17 @@ async function callGemini({
         clearTimeout(timeout)
         const isAbort = error instanceof DOMException && error.name === 'AbortError'
         lastError = isAbort
-          ? new Error(`Gemini request timed out after ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s for model ${modelName}.`)
-          : error instanceof Error
+          ? new CloudAIError(
+              `Gemini request timed out after ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s for model ${modelName}.`,
+              { retryable: true }
+            )
+          : error instanceof CloudAIError
             ? error
-            : new Error(`Unknown Gemini error for model ${modelName}.`)
+            : error instanceof Error
+              ? new CloudAIError(error.message, { retryable: false })
+              : new CloudAIError(`Unknown Gemini error for model ${modelName}.`, { retryable: false })
 
-        if (attempt < 3) {
+        if (lastError.retryable && attempt < 3) {
           await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
           continue
         }
@@ -216,6 +292,29 @@ export async function extractPaperWithCloudAI(
 
   const parsed = JSON.parse(normalizeJsonResponse(raw)) as Record<string, unknown>
   return mapParsedExtraction(parsed, customFields)
+}
+
+export async function extractPaperWithFallback(
+  paperText: string,
+  detailLevel: 'brief' | 'detailed',
+  customFields?: CustomFieldDefinition[]
+) {
+  try {
+    const extractedData = await extractPaperWithCloudAI(paperText, detailLevel, customFields)
+    return {
+      extractedData,
+      method: 'Google Gemini',
+      fallbackUsed: false as const
+    }
+  } catch (error) {
+    const extractedData = extractWithRules(paperText)
+    return {
+      extractedData,
+      method: 'Rule-based fallback',
+      fallbackUsed: true as const,
+      warning: error instanceof Error ? error.message : 'Cloud AI failed; used fallback extraction.'
+    }
+  }
 }
 
 export async function extractCustomFieldWithCloudAI(

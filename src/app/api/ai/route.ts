@@ -4,7 +4,7 @@ import { type CustomFieldDefinition } from '@/lib/prompt-builder'
 import { requireRequestUser } from '@/lib/server/auth'
 import {
   extractCustomFieldWithCloudAI,
-  extractPaperWithCloudAI,
+  extractPaperWithFallback,
   getCloudAIAvailability,
   performCrossPaperAnalysisWithCloudAI,
   reExtractFieldsWithCloudAI
@@ -65,13 +65,19 @@ export async function POST(request: Request) {
       }
 
       case 'extractPaper': {
-        const extractedData = await extractPaperWithCloudAI(
+        const result = await extractPaperWithFallback(
           body.paperText,
           body.detailLevel || 'brief',
           body.customFields
         )
 
-        return NextResponse.json({ success: true, extractedData })
+        return NextResponse.json({
+          success: true,
+          extractedData: result.extractedData,
+          method: result.method,
+          fallbackUsed: result.fallbackUsed,
+          warning: result.warning
+        })
       }
 
       case 'extractCustomField': {

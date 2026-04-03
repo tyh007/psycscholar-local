@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createProject, getProjects } from '@/lib/server/data-store'
 import { requireRequestUser } from '@/lib/server/auth'
+import { getErrorMessage } from '@/lib/server/error-utils'
 
 export async function GET(request: Request) {
   try {
@@ -8,9 +9,10 @@ export async function GET(request: Request) {
     const projects = await getProjects(user.id)
     return NextResponse.json({ success: true, projects })
   } catch (error) {
+    console.error('GET /api/projects failed:', error)
     const status = error instanceof Error && error.message === 'Unauthorized' ? 401 : 500
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Failed to load projects' },
+      { success: false, error: getErrorMessage(error, 'Failed to load projects') },
       { status }
     )
   }
@@ -26,9 +28,10 @@ export async function POST(request: Request) {
     const project = await createProject(user.id, body.name.trim(), body.description)
     return NextResponse.json({ success: true, project })
   } catch (error) {
+    console.error('POST /api/projects failed:', error)
     const status = error instanceof Error && error.message === 'Unauthorized' ? 401 : 500
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Failed to create project' },
+      { success: false, error: getErrorMessage(error, 'Failed to create project') },
       { status }
     )
   }
