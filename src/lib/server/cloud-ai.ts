@@ -63,16 +63,27 @@ function slicePaperText(text: string, maxChars = 25000) {
 // Advanced text cleaning
 function cleanAndNormalizeText(text: string): string {
   return text
+    // Fix hyphenated words broken across lines (e.g., "litera-ture" → "literature")
+    .replace(/(\w+)-\s*\n\s*(\w+)/g, '$1$2')
     // Remove page numbers and page markers
     .replace(/^[\s\d]*\n/gm, '')
     .replace(/\n[\s\d]*$/gm, '')
+    // Remove KEYWORDS and similar metadata sections
+    .replace(/\bKEYWORDS\b.*?(?=\n\n|\n[A-Z]|$)/is, '')
+    .replace(/\bABSTRACT\b\s*[:\-]?\s*/i, '')
+    // Remove figure/table warnings
+    .replace(/\b(?:Table|Figure)\s+\d+[:\s\-].*?(?=\n\n|\n[A-Z])/is, '')
+    // Remove author affiliation lines
+    .replace(/^.*?@.*?$\n/gm, '')
+    .replace(/^.*?(?:University|Department|School|College|Institute).*?$\n/gm, '')
+    // Fix hyphenation in middle of paragraphs
+    .replace(/(\w+)-(?=\n)/g, '$1')
     // Remove repeated whitespace
     .replace(/\n{3,}/g, '\n\n')
-    .replace(/\s{2,}/g, ' ')
-    // Remove common artifacts
-    .replace(/\b(?:Table|Figure)\s+\d+[:\s\-].*?(?=\n\n|\n[A-Z])/is, '')
+    .replace(/  +/g, ' ')
     .trim()
 }
+
 
 // Detect and remove duplicate sentences/paragraphs
 function deduplicateText(text: string): string {
@@ -167,22 +178,36 @@ function formatAsBulletPoints(text: string, maxBullets: number = 3): string {
     .split(/(?<=[.!?])\s+/)
     .map(s => s.trim())
     .filter(s => {
-      // Minimum length 25 chars
+      // Minimum length 25 chars for complete sentences
       if (s.length < 25) return false
       // Filter out common artifacts
-      if (/^(fig|table|ref|page|www|http|author|affiliation)/i.test(s)) return false
+      if (/^(fig|table|ref|page|www|http|author|affiliation|keywords)/i.test(s)) return false
       // Filter incomplete sentences
-      if (s.endsWith('...') || s.endsWith('–')) return false
+      if (s.endsWith('...') || s.endsWith('–') || s.endsWith('-')) return false
+      // Filter sentences with incomplete markers
+      if (/\w+-\s*$/.test(s)) return false
       return true
     })
   
   if (sentences.length === 0) return 'Not mentioned'
   
-  // Deduplicate sentences with better matching
+  // Additional filtering for quality
+  const qualitySentences = sentences.filter(s => {
+    // Ensure sentence is reasonably complete
+    const words = s.split(/\s+/)
+    if (words.length < 6) return false // Must have at least 6 words
+    // Avoid meta/reference sentences
+    if (/^(in.*example|for.*instance|such as|note that)/i.test(s)) return false
+    return true
+  })
+  
+  if (qualitySentences.length === 0) return 'Not mentioned'
+  
+  // Deduplicate sentences with exact match
   const seenSentences = new Set<string>()
   const uniqueSentences: string[] = []
   
-  for (const sentence of sentences) {
+  for (const sentence of qualitySentences) {
     const normalized = sentence.toLowerCase()
     
     // Check for exact duplicates
