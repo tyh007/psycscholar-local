@@ -37,9 +37,10 @@ Guidelines:
   private static readonly BRIEF_MODE_INSTRUCTIONS = `Provide concise, bullet-point style responses focusing on the most essential information. 
 For each field, format your response as:
 - Use bullet points (•) for key items
-- Keep each bullet point to 1 sentence maximum
+- Keep each bullet point to 1 complete sentence maximum
 - Aim for 2-4 bullet points per field
-- Be specific and avoid repetition
+- Be specific and avoid repetition AT ALL COSTS
+- Never repeat the same information in different words
 - If no information available, respond with exactly: "Not mentioned"`
 
   private static readonly DETAILED_MODE_INSTRUCTIONS = `Provide comprehensive, detailed responses including specific statistics, methodological details, and nuanced findings. Include relevant quotes or specific details from the text when available.`
@@ -106,12 +107,14 @@ ${outputTemplate}
 Output format instructions:
 - For brief mode: Each field value should be well-formatted bullets separated by newlines, starting with "• "
 - Example: "• First key finding\n• Second key finding\n• Third key finding"
+- CRITICAL: Each bullet must be unique - NEVER repeat similar information
 - Do NOT include markdown code blocks or extra formatting
 - Replace every empty string with real paper-specific content
 - Do not copy the field descriptions above
 - If a field is truly unavailable, use exactly: "Not mentioned"
 - Do not include any explanations or extra keys
-- Ensure NO text is truncated or incomplete`
+- Ensure NO text is truncated, incomplete, or repeated
+- Maximum 3 distinct bullet points per field`
 
     return {
       systemPrompt,

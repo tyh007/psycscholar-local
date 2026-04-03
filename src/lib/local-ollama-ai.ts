@@ -272,14 +272,20 @@ function pickSentencesByKeywords(text: string, keywords: string[], count: number
   if (sentences.length === 0) return undefined
 
   const picked: string[] = []
+  const seenNormalized = new Set<string>()
+  
   for (const item of sentences) {
-    if (!picked.includes(item.sentence)) {
+    // Check for exact duplicates
+    const normalized = item.sentence.toLowerCase()
+    if (!seenNormalized.has(normalized) && !picked.includes(item.sentence)) {
+      seenNormalized.add(normalized)
       picked.push(item.sentence)
     }
     if (picked.length >= count) break
   }
 
-  return picked.join(' ').slice(0, maxChars)
+  const result = picked.join(' ').slice(0, maxChars)
+  return result.length > 0 ? result : undefined
 }
 
 function seemsLikeLimitation(text: string) {
@@ -408,24 +414,38 @@ function isUsableSectionParagraph(paragraph: string) {
   return true
 }
 
-// Format text into bullet points
+// Format text into bullet points with better deduplication
 function formatAsBulletPoints(text: string, maxBullets: number = 3): string {
   if (!text || text === 'Not mentioned') return 'Not mentioned'
   
-  // Split sentences
+  // Split into sentences, filtering duplicates  
   const sentences = text
     .split(/(?<=[.!?])\s+/)
     .map(s => s.trim())
-    .filter(s => s.length > 20)
+    .filter(s => s.length > 25 && !s.match(/^(fig|table|ref|page|www|http)/i))
   
   if (sentences.length === 0) return 'Not mentioned'
   
-  // Take top sentences as bullet points
-  const bullets = sentences.slice(0, maxBullets)
+  // Deduplicate sentences - simple exact match
+  const seenSentences = new Set<string>()
+  const uniqueSentences: string[] = []
+  
+  for (const sentence of sentences) {
+    const normalized = sentence.toLowerCase()
+    if (!seenSentences.has(normalized)) {
+      seenSentences.add(normalized)
+      uniqueSentences.push(sentence)
+    }
+  }
+  
+  if (uniqueSentences.length === 0) return 'Not mentioned'
+  
+  // Format as bullet points
+  const bullets = uniqueSentences.slice(0, maxBullets)
     .map(s => `• ${s}`)
     .join('\n')
   
-  return bullets || text.slice(0, 200)
+  return bullets || 'Not mentioned'
 }
 
 export function extractPaperWithRules(text: string): ExtractedData {

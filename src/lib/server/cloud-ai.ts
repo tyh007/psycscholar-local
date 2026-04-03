@@ -60,56 +60,136 @@ function slicePaperText(text: string, maxChars = 25000) {
   return lastNewline > maxChars * 0.8 ? sliced.slice(0, lastNewline) : sliced
 }
 
-// Format text into bullet points
+// Advanced text cleaning
+function cleanAndNormalizeText(text: string): string {
+  return text
+    // Remove page numbers and page markers
+    .replace(/^[\s\d]*\n/gm, '')
+    .replace(/\n[\s\d]*$/gm, '')
+    // Remove repeated whitespace
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/\s{2,}/g, ' ')
+    // Remove common artifacts
+    .replace(/\b(?:Table|Figure)\s+\d+[:\s\-].*?(?=\n\n|\n[A-Z])/is, '')
+    .trim()
+}
+
+// Detect and remove duplicate sentences/paragraphs
+function deduplicateText(text: string): string {
+  const paragraphs = text.split(/\n\n+/).map(p => p.trim()).filter(Boolean)
+  const seen = new Set<string>()
+  const deduplicated: string[] = []
+  
+  for (const para of paragraphs) {
+    // Normalize for comparison (lowercase, remove extra spaces)
+    const normalized = para.toLowerCase().replace(/\s+/g, ' ')
+    
+    // Check if this paragraph or similar ones have been seen
+    let isDuplicate = false
+    for (const seenPara of seen) {
+      // Calculate similarity
+      const similarity = calculateStringSimilarity(normalized, seenPara)
+      if (similarity > 0.75) {
+        isDuplicate = true
+        break
+      }
+    }
+    
+    if (!isDuplicate) {
+      seen.add(normalized)
+      deduplicated.push(para)
+    }
+  }
+  
+  return deduplicated.join('\n\n')
+}
+
+// Simple similarity scoring
+function calculateStringSimilarity(a: string, b: string): number {
+  const longer = a.length > b.length ? a : b
+  const shorter = a.length > b.length ? b : a
+  
+  if (longer.length === 0) return 1.0
+  
+  const editDistance = getEditDistance(longer, shorter)
+  return (longer.length - editDistance) / longer.length
+}
+
+// Levenshtein distance for similarity
+function getEditDistance(a: string, b: string): number {
+  const costs: number[] = []
+  for (let i = 0; i <= a.length; i++) {
+    let lastValue = i
+    for (let j = 0; j <= b.length; j++) {
+      if (i === 0) {
+        costs[j] = j
+      } else if (j > 0) {
+        let newValue = costs[j - 1]
+        if (a.charAt(i - 1) !== b.charAt(j - 1)) {
+          newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1
+        }
+        costs[j - 1] = lastValue
+        lastValue = newValue
+      }
+    }
+    if (i > 0) costs[b.length] = lastValue
+  }
+  return costs[b.length]
+}
+
+// Format text into bullet points with better deduplication
 function formatAsBulletPoints(text: string, maxBullets: number = 3): string {
   if (!text || text === 'Not mentioned') return 'Not mentioned'
   
-  // Split sentences
-  const sentences = text
+  // Clean the text first
+  const cleaned = cleanAndNormalizeText(text)
+  
+  // Split into sentences, filtering duplicates
+  const sentences = cleaned
     .split(/(?<=[.!?])\s+/)
     .map(s => s.trim())
-    .filter(s => s.length > 20)
+    .filter(s => s.length > 25 && !s.match(/^(fig|table|ref|page|www|http)/i))
   
   if (sentences.length === 0) return 'Not mentioned'
   
-  // Take top sentences as bullet points
-  const bullets = sentences.slice(0, maxBullets)
+  // Deduplicate sentences
+  const seenSentences = new Set<string>()
+  const uniqueSentences: string[] = []
+  
+  for (const sentence of sentences) {
+    const normalized = sentence.toLowerCase()
+    if (!seenSentences.has(normalized)) {
+      seenSentences.add(normalized)
+      uniqueSentences.push(sentence)
+    }
+  }
+  
+  if (uniqueSentences.length === 0) return 'Not mentioned'
+  
+  // Format as bullet points
+  const bullets = uniqueSentences.slice(0, maxBullets)
     .map(s => `• ${s}`)
     .join('\n')
   
-  return bullets || text.slice(0, 200)
+  return bullets || 'Not mentioned'
 }
 
 function extractWithRules(text: string): ExtractedData {
-  const paragraphs = text
+  // Clean and deduplicate text first
+  const cleanedText = cleanAndNormalizeText(text)
+  const dedupedText = deduplicateText(cleanedText)
+  
+  const paragraphs = dedupedText
     .split(/\n\n+/)
     .map(p => p.trim())
     .filter(p => p.length > 80)
     .filter(p => !looksLikeFrontMatter(p))
 
-  const abstract = extractAbstractBlock(text)
+  const abstract = extractAbstractBlock(dedupedText)
 
-  const findSection = (keywords: string[]) => {
-    // Search through first 50 paragraphs for better coverage
-    for (const para of paragraphs.slice(0, 50)) {
-      const lower = para.toLowerCase()
-      if (keywords.some(keyword => lower.includes(keyword)) && isUsableSectionParagraph(para)) {
-        // Return more content (500 chars instead of 420)
-        return para.slice(0, 500)
-      }
-    }
-    // Fallback: pick sentences by keyword relevance
-    const sentences = text.split(/[.!?]+/).filter(s => s.length > 50)
-    for (const keyword of keywords) {
-      const relevant = sentences.find(s => s.toLowerCase().includes(keyword))
-      if (relevant) return relevant.trim().slice(0, 500)
-    }
-    return 'Not mentioned'
-  }
-
-  const findMultipleSentences = (keywords: string[], count: number = 2) => {
-    const sentences = text
-      .split(/[.!?]+/)
+  const findMultipleSentences = (keywords: string[], count: number = 3) => {
+    const sentences = dedupedText
+      .split(/(?<=[.!?])\s+/)
       .map(s => s.trim())
       .filter(s => s.length > 30 && !looksLikeFrontMatter(s))
     
@@ -119,20 +199,21 @@ function extractWithRules(text: string): ExtractedData {
       return { sentence: s, score }
     }).filter(item => item.score > 0).sort((a, b) => b.score - a.score)
     
-    const result = scored.slice(0, count).map(item => item.sentence).join(' ').slice(0, 500) || 'Not mentioned'
-    return result
+    if (scored.length === 0) return 'Not mentioned'
+    const result = scored.slice(0, count).map(item => item.sentence).join(' ')
+    return result.slice(0, 600) || 'Not mentioned'
   }
 
   const formatResult = (result: string): string => formatAsBulletPoints(result, 3)
 
   return {
     background: formatResult(abstract || findMultipleSentences(['background', 'introduction', 'literature', 'context', 'motivation'], 3)),
-    theory: formatResult(findMultipleSentences(['theory', 'theoretical', 'hypothesis', 'framework', 'model'], 3)),
-    methodology: formatResult(findMultipleSentences(['method', 'participants', 'procedure', 'design', 'sample'], 3)),
-    measures: formatResult(findMultipleSentences(['measure', 'instrument', 'scale', 'assessment', 'questionnaire'], 3)),
-    results: formatResult(findMultipleSentences(['result', 'finding', 'analysis', 'significant', 'effect', 'accuracy'], 3)),
-    implications: formatResult(findMultipleSentences(['implication', 'discussion', 'conclusion', 'contribution', 'practical'], 3)),
-    limitations: formatResult(findMultipleSentences(['limitation', 'future research', 'constraint', 'weakness'], 3))
+    theory: formatResult(findMultipleSentences(['theory', 'theoretical', 'hypothesis', 'framework', 'model', 'approach'], 3)),
+    methodology: formatResult(findMultipleSentences(['method', 'participants', 'procedure', 'design', 'sample', 'study'], 3)),
+    measures: formatResult(findMultipleSentences(['measure', 'instrument', 'scale', 'assessment', 'questionnaire', 'metric'], 3)),
+    results: formatResult(findMultipleSentences(['result', 'finding', 'analysis', 'significant', 'effect', 'accuracy', 'hypothesis', 'demonstrate'], 3)),
+    implications: formatResult(findMultipleSentences(['implication', 'discussion', 'conclusion', 'contribution', 'practical', 'application', 'advance'], 3)),
+    limitations: formatResult(findMultipleSentences(['limitation', 'future research', 'constraint', 'weakness', 'limitation', 'future work', 'challenge'], 3))
   }
 }
 
