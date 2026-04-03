@@ -92,6 +92,36 @@ function parseExtractionResponse(parsed: Record<string, unknown>): ExtractedData
   }
 }
 
+const TEMPLATE_PHRASES = [
+  'research context, problem statement',
+  'theoretical framework and specific hypotheses',
+  'research design, sample characteristics',
+  'all scales, instruments, and measurement tools',
+  'main findings, statistical results',
+  'theoretical and practical contributions',
+  'study limitations acknowledged by authors'
+]
+
+function looksLikeTemplateOutput(text: string) {
+  const lower = text.toLowerCase()
+  return TEMPLATE_PHRASES.some(phrase => lower.includes(phrase))
+}
+
+function validateExtractedData(extracted: ExtractedData) {
+  const values = [
+    extracted.background,
+    extracted.theory,
+    extracted.methodology,
+    extracted.measures,
+    extracted.results,
+    extracted.implications,
+    extracted.limitations
+  ]
+
+  const meaningfulCount = values.filter(value => value && value !== 'Not mentioned' && !looksLikeTemplateOutput(value)).length
+  return meaningfulCount >= 2
+}
+
 function normalizeWhitespace(value: string) {
   return value.replace(/\s+/g, ' ').trim()
 }
@@ -389,8 +419,14 @@ export async function extractPaperWithLocalOllama(
     customFields
   )
   const result = await chatForJson(prompt.systemPrompt, prompt.userPrompt, model)
+  const extractedData = parseExtractionResponse(result.parsed)
+
+  if (!validateExtractedData(extractedData)) {
+    throw new Error('Ollama returned placeholder or low-signal extraction output.')
+  }
+
   return {
-    extractedData: parseExtractionResponse(result.parsed),
+    extractedData,
     model: result.model
   }
 }

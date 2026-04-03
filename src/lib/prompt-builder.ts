@@ -14,6 +14,16 @@ export interface CustomFieldDefinition {
 }
 
 export class PromptBuilder {
+  private static readonly FIELD_GUIDANCE: Record<string, string> = {
+    background: 'Research context, problem statement, and why the study matters. Mention the gap addressed.',
+    theory: 'Theoretical framework, key hypotheses, or conceptual propositions tested.',
+    methodology: 'Research design, sample, procedures, and analyses.',
+    measures: 'Scales, instruments, tasks, or operationalisations used.',
+    results: 'Main findings, statistical patterns, and substantive conclusions.',
+    implications: 'Theoretical or practical implications and contributions.',
+    limitations: 'Limitations, caveats, or future research directions.'
+  }
+
   private static readonly BASE_SYSTEM_PROMPT = `You are a highly skilled academic researcher and psychologist with expertise in quantitative and qualitative research methods. Your task is to carefully analyze psychology research papers and extract structured information with precision and accuracy.
 
 Guidelines:
@@ -54,26 +64,29 @@ Please extract the following information from the psychology research paper and 
     ]
 
     let fieldDescriptions = `
-{
-  "background": "The research context, problem statement, and why this study is important. Include the gap in literature this study addresses.",
-  "theory": "The theoretical framework and specific hypotheses being tested. Include key theories and propositions.",
-  "methodology": "Research design, sample characteristics (N, demographics), data collection methods, and statistical analyses used.",
-  "measures": "All scales, instruments, and measurement tools used. Include reliability coefficients (Cronbach's α), validity information, and scoring methods.",
-  "results": "Main findings, statistical results, effect sizes, and significance levels. Include key statistics and p-values.",
-  "implications": "Theoretical and practical contributions of the findings. How this advances the field or informs practice.",
-  "limitations": "Study limitations acknowledged by authors and suggestions for future research."`
+Fields to fill:
+- background: ${this.FIELD_GUIDANCE.background}
+- theory: ${this.FIELD_GUIDANCE.theory}
+- methodology: ${this.FIELD_GUIDANCE.methodology}
+- measures: ${this.FIELD_GUIDANCE.measures}
+- results: ${this.FIELD_GUIDANCE.results}
+- implications: ${this.FIELD_GUIDANCE.implications}
+- limitations: ${this.FIELD_GUIDANCE.limitations}`
 
     // Add custom fields if provided
     if (customFields && customFields.length > 0) {
       customFields.forEach(field => {
         fields.push(field.id)
-        fieldDescriptions += `,
-  "${field.id}": "${field.description}"`
+        fieldDescriptions += `
+- ${field.id}: ${field.description}`
       })
     }
 
-    fieldDescriptions += `
-}`
+    const outputTemplate = JSON.stringify(
+      Object.fromEntries(fields.map(field => [field, ''])),
+      null,
+      2
+    )
 
     const userPrompt = `Please analyze the following psychology research paper text and extract the requested information:
 
@@ -81,7 +94,14 @@ ${paperText}
 
 ${fieldDescriptions}
 
-Respond with valid JSON only. Do not include any explanations, markdown formatting, or text outside of the JSON structure.`
+Return valid JSON only using exactly these keys:
+${outputTemplate}
+
+Important:
+- Replace every empty string with real paper-specific content.
+- Do not copy the field descriptions above.
+- If a field is truly unavailable, use "Not mentioned".
+- Do not include any explanations, markdown, or extra keys.`
 
     return {
       systemPrompt,
