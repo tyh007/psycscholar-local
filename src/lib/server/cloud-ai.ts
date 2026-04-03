@@ -2,6 +2,8 @@ import { type ExtractedData } from '@/lib/database'
 import { PromptBuilder, type CustomFieldDefinition } from '@/lib/prompt-builder'
 
 const DEFAULT_MODEL = 'gemini-2.0-flash'
+const FALLBACK_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash']
+const REQUEST_TIMEOUT_MS = 45000
 const BASE_FIELDS = [
   'background',
   'theory',
@@ -63,49 +65,86 @@ async function callGemini({
     throw new Error('Cloud AI is not configured. Set GEMINI_API_KEY in the server environment.')
   }
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        ...(systemPrompt
-          ? {
-              systemInstruction: {
-                parts: [{ text: systemPrompt }]
-              }
-            }
-          : {}),
-        contents: [
+  const modelCandidates = [model, ...FALLBACK_MODELS.filter(candidate => candidate !== model)]
+  let lastError: Error | null = null
+
+  for (const modelName of modelCandidates) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
           {
-            role: 'user',
-            parts: [{ text: userPrompt }]
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              ...(systemPrompt
+                ? {
+                    systemInstruction: {
+                      parts: [{ text: systemPrompt }]
+                    }
+                  }
+                : {}),
+              contents: [
+                {
+                  role: 'user',
+                  parts: [{ text: userPrompt }]
+                }
+              ],
+              generationConfig: {
+                temperature,
+                maxOutputTokens,
+                ...(responseMimeType ? { responseMimeType } : {})
+              }
+            }),
+            signal: controller.signal
           }
-        ],
-        generationConfig: {
-          temperature,
-          maxOutputTokens,
-          ...(responseMimeType ? { responseMimeType } : {})
+        )
+        clearTimeout(timeout)
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          const retryable = response.status === 429 || response.status >= 500
+          lastError = new Error(`Gemini error (${modelName}, attempt ${attempt}): ${response.status} - ${errorText}`)
+          if (retryable && attempt < 3) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+            continue
+          }
+          break
         }
-      })
+
+        const data = await response.json()
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text
+
+        if (!text) {
+          throw new Error(`Gemini returned an empty response for model ${modelName}.`)
+        }
+
+        return text
+      } catch (error) {
+        clearTimeout(timeout)
+        const isAbort = error instanceof DOMException && error.name === 'AbortError'
+        lastError = isAbort
+          ? new Error(`Gemini request timed out after ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s for model ${modelName}.`)
+          : error instanceof Error
+            ? error
+            : new Error(`Unknown Gemini error for model ${modelName}.`)
+
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+          continue
+        }
+
+        break
+      }
     }
-  )
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Gemini error: ${response.status} - ${errorText}`)
   }
 
-  const data = await response.json()
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-
-  if (!text) {
-    throw new Error('Gemini returned an empty response.')
-  }
-
-  return text
+  throw lastError || new Error('Cloud AI request failed')
 }
 
 function ensureString(value: unknown) {

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from 'react'
+import { type Session } from '@supabase/supabase-js'
 import { Sidebar } from '@/components/sidebar'
 import { ResizableSidebar } from '@/components/resizable-sidebar'
 import { MainContent } from '@/components/main-content'
@@ -8,10 +9,14 @@ import { PaperDetailView } from '@/components/paper-detail-view'
 import { useFileUpload } from '@/hooks/use-file-upload'
 import { useAIExtraction } from '@/hooks/use-ai-extraction'
 import { db, type Project, type Paper, type ExtractedData, type CustomField } from '@/lib/database'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { type CustomFieldDefinition } from '@/lib/prompt-builder'
 import { PSYCHOLOGY_CUSTOM_FIELDS } from '@/lib/prompt-builder'
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 function dbCustomFieldToDef(row: CustomField): CustomFieldDefinition {
   return {
@@ -43,6 +48,10 @@ function readInitialSidebarWidth() {
 }
 
 export default function Home() {
+  const [session, setSession] = useState<Session | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [email, setEmail] = useState('')
+  const [authSubmitting, setAuthSubmitting] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
   const [papers, setPapers] = useState<Paper[]>([])
   const [activeProject, setActiveProject] = useState<string | null>(null)
@@ -118,13 +127,48 @@ export default function Home() {
   )
 
   useEffect(() => {
-    const initializeApp = async () => {
+    const supabase = getSupabaseBrowserClient()
+
+    const bootstrapAuth = async () => {
       try {
+        const { data } = await supabase.auth.getSession()
+        setSession(data.session)
+      } finally {
+        setAuthLoading(false)
+      }
+    }
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession)
+    })
+
+    bootstrapAuth()
+    return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    const initializeApp = async () => {
+      if (!session) {
+        setProjects([])
+        setPapers([])
+        setActiveProject(null)
+        setProjectCustomFields([])
+        setTrashCount(0)
+        setIsLoading(false)
+        return
+      }
+
+      try {
+        setIsLoading(true)
         await checkAIAvailability()
         const projectList = await db.getProjects()
         setProjects(projectList)
-        if (projectList.length > 0 && !activeProject) {
-          setActiveProject(projectList[0].id!)
+        if (projectList.length > 0) {
+          setActiveProject(prev => prev && projectList.some(project => project.id === prev) ? prev : projectList[0].id!)
+        } else {
+          setActiveProject(null)
         }
       } catch (error) {
         console.error('Failed to initialize app:', error)
@@ -134,8 +178,8 @@ export default function Home() {
       }
     }
 
-    initializeApp()
-  }, [])
+    void initializeApp()
+  }, [session, checkAIAvailability])
 
   useEffect(() => {
     if (activeProject) {
@@ -392,6 +436,64 @@ export default function Home() {
     )
   }
 
+  if (authLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Checking session...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!session) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background p-6">
+        <Card className="w-full max-w-md p-6">
+          <div className="space-y-4">
+            <div>
+              <h1 className="text-2xl font-semibold text-foreground">Sign in to PsycScholar</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Your projects and papers are now private to your account. Enter your email and we&apos;ll send you a secure magic link.
+              </p>
+            </div>
+            <Input
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+            <Button
+              className="w-full"
+              disabled={authSubmitting || !email.trim()}
+              onClick={async () => {
+                try {
+                  setAuthSubmitting(true)
+                  const supabase = getSupabaseBrowserClient()
+                  const { error } = await supabase.auth.signInWithOtp({
+                    email: email.trim(),
+                    options: {
+                      emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined
+                    }
+                  })
+                  if (error) throw error
+                  toast.success('Magic link sent. Check your email to sign in.')
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : 'Could not send sign-in email')
+                } finally {
+                  setAuthSubmitting(false)
+                }
+              }}
+            >
+              {authSubmitting ? 'Sending link...' : 'Send magic link'}
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-screen bg-background">
       <ResizableSidebar width={sidebarWidth} onWidthChange={persistSidebarWidth}>
@@ -406,6 +508,10 @@ export default function Home() {
           trashCount={trashCount}
           onOpenTrash={() => setViewMode('trash')}
           onBackToLibrary={() => setViewMode('library')}
+          userEmail={session.user.email}
+          onSignOut={() => {
+            void getSupabaseBrowserClient().auth.signOut()
+          }}
         />
       </ResizableSidebar>
       <MainContent
@@ -453,12 +559,12 @@ export default function Home() {
           </DialogHeader>
           <div className="space-y-3 text-sm text-muted-foreground">
             <p>
-              PDFs and extraction results are stored in this browser (IndexedDB). AI extraction now runs through the
-              app&apos;s server-side cloud model, so the public deployment can process papers without local Ollama.
+              Projects, papers, and extraction results are now stored in a shared cloud database. AI extraction runs
+              through the app&apos;s server-side cloud model, so collaborators can use the same hosted workspace.
             </p>
             <p>
-              The deployment needs a server-side Gemini API key and model configured. Once those environment variables
-              are set, users can upload PDFs and run extraction directly from the hosted app.
+              The deployment needs server-side Supabase and Gemini environment variables configured. Once those are in
+              place, users can upload PDFs and run extraction directly from the hosted app.
             </p>
             <p>
               Adjust <strong className="text-foreground">Detail level</strong> before re-extracting or adding custom columns; newly uploaded papers use the current pipeline settings.

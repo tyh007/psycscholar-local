@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { type ExtractedData } from '@/lib/database'
 import { type CustomFieldDefinition } from '@/lib/prompt-builder'
+import { requireRequestUser } from '@/lib/server/auth'
 import {
   extractCustomFieldWithCloudAI,
   extractPaperWithCloudAI,
@@ -55,6 +56,7 @@ type AIRequest =
 
 export async function POST(request: Request) {
   try {
+    await requireRequestUser(request)
     const body = (await request.json()) as AIRequest
 
     switch (body.action) {
@@ -109,7 +111,8 @@ export async function POST(request: Request) {
         )
     }
   } catch (error) {
+    const status = error instanceof Error && error.message === 'Unauthorized' ? 401 : 500
     const message = error instanceof Error ? error.message : 'Unknown AI server error'
-    return NextResponse.json({ success: false, error: message }, { status: 500 })
+    return NextResponse.json({ success: false, error: message }, { status })
   }
 }

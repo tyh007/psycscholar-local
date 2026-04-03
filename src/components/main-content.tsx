@@ -617,7 +617,7 @@ export function MainContent({
                 />
               </div>
               <div className="mt-6 text-xs text-muted-foreground">
-                <p>PDFs are parsed in the browser; AI extraction runs through the app&apos;s cloud backend</p>
+                <p>PDFs are parsed in the browser; projects and extraction results are saved to the shared cloud workspace</p>
               </div>
             </div>
           </Card>

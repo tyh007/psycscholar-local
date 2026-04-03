@@ -13,7 +13,8 @@ import {
   ChevronRight,
   Plus,
   Trash2,
-  ArchiveRestore
+  ArchiveRestore,
+  LogOut
 } from 'lucide-react'
 import { type Project } from '@/lib/database'
 
@@ -28,6 +29,8 @@ interface SidebarProps {
   trashCount?: number
   onOpenTrash?: () => void
   onBackToLibrary?: () => void
+  userEmail?: string
+  onSignOut?: () => void
 }
 
 export function Sidebar({ 
@@ -40,7 +43,9 @@ export function Sidebar({
   viewMode = 'library',
   trashCount = 0,
   onOpenTrash,
-  onBackToLibrary
+  onBackToLibrary,
+  userEmail,
+  onSignOut
 }: SidebarProps) {
   const [newProjectName, setNewProjectName] = useState('')
   const [isCreatingProject, setIsCreatingProject] = useState(false)
@@ -64,10 +69,18 @@ export function Sidebar({
       <div className="border-b border-border p-6">
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-xl font-semibold text-foreground">PsycScholar</h1>
-          <Button variant="ghost" size="sm" type="button" onClick={() => onOpenSettings?.()} title="Settings">
-            <Settings className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" type="button" onClick={() => onOpenSettings?.()} title="Settings">
+              <Settings className="h-4 w-4" />
+            </Button>
+            {onSignOut ? (
+              <Button variant="ghost" size="sm" type="button" onClick={onSignOut} title="Sign out">
+                <LogOut className="h-4 w-4" />
+              </Button>
+            ) : null}
+          </div>
         </div>
+        {userEmail ? <p className="mb-3 truncate text-xs text-muted-foreground">{userEmail}</p> : null}
         
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-muted-foreground" />

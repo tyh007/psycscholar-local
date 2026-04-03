@@ -1,4 +1,4 @@
-import Dexie, { type Table } from 'dexie'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 
 export interface Project {
   id?: string
@@ -27,7 +27,6 @@ export interface Paper {
   extractedData?: ExtractedData
   processingStatus: 'pending' | 'processing' | 'completed' | 'error'
   errorMessage?: string
-  /** Soft-delete: hidden from main grid until restored or permanently deleted */
   inTrash?: boolean
   trashedAt?: Date
 }
@@ -48,151 +47,154 @@ export interface CustomField {
   projectId: string
   name: string
   description?: string
-  /** AI extraction instructions for this column */
   prompt?: string
   createdAt: Date
 }
 
-export class PsycScholarDB extends Dexie {
-  projects!: Table<Project>
-  papers!: Table<Paper>
-  customFields!: Table<CustomField>
+type JsonResult<T> = {
+  success: boolean
+  error?: string
+} & T
 
-  constructor() {
-    super('PsycScholarDB')
-    
-    this.version(1).stores({
-      projects: '++id, name, createdAt, updatedAt, paperCount',
-      papers: '++id, projectId, fileName, uploadedAt, processingStatus, title, authors, year',
-      customFields: '++id, projectId, name, createdAt'
-    })
+function toDate(value?: string | Date | null) {
+  if (!value) return undefined
+  return value instanceof Date ? value : new Date(value)
+}
+
+function mapProject(project: any): Project {
+  return {
+    ...project,
+    createdAt: toDate(project.createdAt)!,
+    updatedAt: toDate(project.updatedAt)!
+  }
+}
+
+function mapPaper(paper: any): Paper {
+  return {
+    ...paper,
+    uploadedAt: toDate(paper.uploadedAt)!,
+    processedAt: toDate(paper.processedAt),
+    trashedAt: toDate(paper.trashedAt)
+  }
+}
+
+function mapCustomField(field: any): CustomField {
+  return {
+    ...field,
+    createdAt: toDate(field.createdAt)!
+  }
+}
+
+async function apiFetch<T>(input: string, init?: RequestInit): Promise<T> {
+  const supabase = getSupabaseBrowserClient()
+  const {
+    data: { session }
+  } = await supabase.auth.getSession()
+
+  if (!session?.access_token) {
+    throw new Error('Please sign in to continue.')
   }
 
-  // Project operations
-  async createProject(name: string, description?: string): Promise<Project> {
-    const project: Project = {
-      name,
-      description,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      paperCount: 0
+  const response = await fetch(input, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+      ...(init?.headers || {})
     }
-    
-    const id = await this.projects.add(project)
-    return { ...project, id: id.toString() }
+  })
+
+  const data = (await response.json()) as JsonResult<T>
+
+  if (!response.ok || data.success === false) {
+    throw new Error(data.error || 'Request failed')
+  }
+
+  return data as T
+}
+
+class RemotePsycScholarDB {
+  async createProject(name: string, description?: string): Promise<Project> {
+    const data = await apiFetch<{ project: Project }>('/api/projects', {
+      method: 'POST',
+      body: JSON.stringify({ name, description })
+    })
+    return mapProject(data.project)
   }
 
   async getProjects(): Promise<Project[]> {
-    return await this.projects.toArray()
+    const data = await apiFetch<{ projects: Project[] }>('/api/projects')
+    return data.projects.map(mapProject)
   }
 
   async getProject(id: string): Promise<Project | undefined> {
-    return await this.projects.get(id)
+    const data = await apiFetch<{ project: Project | null }>(`/api/projects/${id}`)
+    return data.project ? mapProject(data.project) : undefined
   }
 
   async updateProject(id: string, updates: Partial<Project>): Promise<void> {
-    await this.projects.update(id, { ...updates, updatedAt: new Date() })
-  }
-
-  async deleteProject(id: string): Promise<void> {
-    await this.transaction('rw', this.projects, this.papers, this.customFields, async () => {
-      await this.papers.where('projectId').equals(id).delete()
-      await this.customFields.where('projectId').equals(id).delete()
-      await this.projects.delete(id)
+    await apiFetch(`/api/projects/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
     })
   }
 
-  // Paper operations
+  async deleteProject(id: string): Promise<void> {
+    await apiFetch(`/api/projects/${id}`, { method: 'DELETE' })
+  }
+
   async addPaper(paper: Omit<Paper, 'id'>): Promise<string> {
-    const id = await this.papers.add({ ...paper, inTrash: false })
-    await this.recalcPaperCount(paper.projectId)
-    return id.toString()
+    const data = await apiFetch<{ id: string }>('/api/papers', {
+      method: 'POST',
+      body: JSON.stringify(paper)
+    })
+    return data.id
   }
 
-  /** Active papers only (not in trash) */
   async getPapers(projectId: string): Promise<Paper[]> {
-    const rows = await this.papers.where('projectId').equals(projectId).toArray()
-    return rows.filter(p => !p.inTrash)
+    const data = await apiFetch<{ papers: Paper[] }>(`/api/papers?projectId=${encodeURIComponent(projectId)}&view=library`)
+    return data.papers.map(mapPaper)
   }
 
-  /** Papers moved to bin */
   async getTrashPapers(projectId: string): Promise<Paper[]> {
-    const rows = await this.papers.where('projectId').equals(projectId).toArray()
-    return rows.filter(p => !!p.inTrash)
-  }
-
-  async recalcPaperCount(projectId: string): Promise<void> {
-    const rows = await this.papers.where('projectId').equals(projectId).toArray()
-    const n = rows.filter(p => !p.inTrash).length
-    await this.projects.update(projectId, { paperCount: n })
+    const data = await apiFetch<{ papers: Paper[] }>(`/api/papers?projectId=${encodeURIComponent(projectId)}&view=trash`)
+    return data.papers.map(mapPaper)
   }
 
   async movePaperToTrash(id: number | string): Promise<void> {
-    const numericId = typeof id === 'string' ? parseInt(id, 10) : id
-    const paper = await this.papers.get(numericId)
-    if (!paper) return
-    await this.papers.update(numericId, { inTrash: true, trashedAt: new Date() })
-    await this.recalcPaperCount(paper.projectId)
+    await apiFetch(`/api/papers/${String(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ action: 'moveToTrash' })
+    })
   }
 
   async restorePaperFromTrash(id: number | string): Promise<void> {
-    const numericId = typeof id === 'string' ? parseInt(id, 10) : id
-    const paper = await this.papers.get(numericId)
-    if (!paper) return
-    await this.papers.update(numericId, { inTrash: false, trashedAt: undefined })
-    await this.recalcPaperCount(paper.projectId)
+    await apiFetch(`/api/papers/${String(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ action: 'restoreFromTrash' })
+    })
   }
 
   async updatePaper(id: number | string, updates: Partial<Paper>): Promise<number> {
-    const numericId = typeof id === 'string' ? parseInt(id, 10) : id
-    console.log(`Updating paper with ID: ${numericId}`)
-    
-    // 确保 extractedData 被正确序列化
-    if (updates.extractedData) {
-      console.log('Extracted data to save:', JSON.stringify(updates.extractedData, null, 2))
-    }
-    
-    try {
-      const result = await this.papers.update(numericId, updates)
-      console.log(`Update result: ${result} rows affected`)
-      
-      if (result === 0) {
-        console.error(`No paper found with ID ${numericId}`)
-        throw new Error(`Paper with ID ${numericId} not found`)
-      }
-      
-      // 立即验证更新
-      const verify = await this.papers.get(numericId)
-      console.log('Verified paper after update:', verify?.id, 'has extractedData:', !!verify?.extractedData)
-      
-      return result
-    } catch (error) {
-      console.error(`Update failed for paper ${numericId}:`, error)
-      throw error
-    }
+    await apiFetch(`/api/papers/${String(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
+    })
+    return 1
   }
 
   async getPaper(id: number | string): Promise<Paper | undefined> {
-    const numericId = typeof id === 'string' ? parseInt(id, 10) : id
-    console.log(`Getting paper with ID: ${numericId}`)
-    return await this.papers.get(numericId)
+    const data = await apiFetch<{ paper: Paper | null }>(`/api/papers/${String(id)}`)
+    return data.paper ? mapPaper(data.paper) : undefined
   }
 
-  /** Permanently remove a paper row (e.g. from bin) */
   async deletePaper(id: number | string): Promise<void> {
-    const numericId = typeof id === 'string' ? parseInt(id, 10) : id
-    const paper = await this.papers.get(numericId)
-    if (paper) {
-      await this.papers.delete(numericId)
-      await this.recalcPaperCount(paper.projectId)
-    }
+    await apiFetch(`/api/papers/${String(id)}`, { method: 'DELETE' })
   }
 
   async searchPapers(projectId: string, query: string): Promise<Paper[]> {
     const papers = await this.getPapers(projectId)
-    
     if (!query.trim()) return papers
-
     const lowerQuery = query.toLowerCase()
     return papers.filter(paper =>
       paper.title?.toLowerCase().includes(lowerQuery) ||
@@ -209,52 +211,29 @@ export class PsycScholarDB extends Dexie {
     )
   }
 
-  // Custom field operations
   async addCustomField(field: Omit<CustomField, 'id'>): Promise<string> {
-    const id = await this.customFields.add(field)
-    return id.toString()
+    const data = await apiFetch<{ id: string }>('/api/custom-fields', {
+      method: 'POST',
+      body: JSON.stringify(field)
+    })
+    return data.id
   }
 
   async getCustomFields(projectId: string): Promise<CustomField[]> {
-    return await this.customFields.where('projectId').equals(projectId).toArray()
+    const data = await apiFetch<{ fields: CustomField[] }>(`/api/custom-fields?projectId=${encodeURIComponent(projectId)}`)
+    return data.fields.map(mapCustomField)
   }
 
   async updateCustomField(id: string | number, updates: Partial<Omit<CustomField, 'id'>>): Promise<void> {
-    const numericId = typeof id === 'string' ? parseInt(id, 10) : id
-    await this.customFields.update(numericId, updates)
-  }
-
-  async deleteCustomField(id: string | number): Promise<void> {
-    const numericId = typeof id === 'string' ? parseInt(id, 10) : id
-    await this.customFields.delete(numericId)
-  }
-
-  // Batch operations
-  async bulkUpdatePapers(updates: Array<{ id: string; data: Partial<Paper> }>): Promise<void> {
-    await this.transaction('rw', this.papers, async () => {
-      for (const update of updates) {
-        await this.papers.update(update.id, update.data)
-      }
+    await apiFetch(`/api/custom-fields/${String(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
     })
   }
 
-  async getProcessingStats(projectId: string): Promise<{
-    total: number
-    pending: number
-    processing: number
-    completed: number
-    error: number
-  }> {
-    const papers = await this.getPapers(projectId)
-    
-    return {
-      total: papers.length,
-      pending: papers.filter(p => p.processingStatus === 'pending').length,
-      processing: papers.filter(p => p.processingStatus === 'processing').length,
-      completed: papers.filter(p => p.processingStatus === 'completed').length,
-      error: papers.filter(p => p.processingStatus === 'error').length
-    }
+  async deleteCustomField(id: string | number): Promise<void> {
+    await apiFetch(`/api/custom-fields/${String(id)}`, { method: 'DELETE' })
   }
 }
 
-export const db = new PsycScholarDB()
+export const db = new RemotePsycScholarDB()

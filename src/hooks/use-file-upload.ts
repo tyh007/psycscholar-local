@@ -55,8 +55,7 @@ export function useFileUpload() {
     }
 
     // Save paper to database first
-    const paperIdStr = await db.addPaper(paper)
-    const paperId = parseInt(paperIdStr, 10)
+    const paperId = await db.addPaper(paper)
     console.log('Paper saved with ID:', paperId)
     
     // Perform AI extraction if enabled and available
@@ -76,14 +75,14 @@ export function useFileUpload() {
         })
         console.log(`Database updated (${method})`)
         
-        return { ...paper, id: paperId.toString(), extractedData: extracted }
+        return { ...paper, id: paperId, extractedData: extracted }
       } catch (error) {
         console.error('AI extraction failed:', error)
         await db.updatePaper(paperId, {
           processingStatus: 'completed',
           errorMessage: 'Extraction failed'
         })
-        return { ...paper, id: paperId.toString() }
+        return { ...paper, id: paperId }
       }
     } else {
       console.log('AI extraction not triggered:', {
@@ -93,7 +92,7 @@ export function useFileUpload() {
       })
     }
 
-    return { ...paper, id: paperId.toString() }
+    return { ...paper, id: paperId }
   }
 
   const uploadFiles = async (files: File[], projectId: string): Promise<FileUploadResult> => {
