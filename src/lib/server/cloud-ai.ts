@@ -52,8 +52,12 @@ function normalizeJsonResponse(text: string) {
   return PromptBuilder.sanitizeResponse(text)
 }
 
-function slicePaperText(text: string, maxChars = 18000) {
-  return text.slice(0, maxChars)
+function slicePaperText(text: string, maxChars = 25000) {
+  // Increased from 18000 to preserve more critical information
+  // Try to slice at a clean paragraph boundary
+  const sliced = text.slice(0, maxChars)
+  const lastNewline = sliced.lastIndexOf('\n\n')
+  return lastNewline > maxChars * 0.8 ? sliced.slice(0, lastNewline) : sliced
 }
 
 function extractWithRules(text: string): ExtractedData {
@@ -66,23 +70,46 @@ function extractWithRules(text: string): ExtractedData {
   const abstract = extractAbstractBlock(text)
 
   const findSection = (keywords: string[]) => {
-    for (const para of paragraphs.slice(0, 40)) {
+    // Search through first 50 paragraphs for better coverage
+    for (const para of paragraphs.slice(0, 50)) {
       const lower = para.toLowerCase()
       if (keywords.some(keyword => lower.includes(keyword)) && isUsableSectionParagraph(para)) {
-        return para.slice(0, 420)
+        // Return more content (500 chars instead of 420)
+        return para.slice(0, 500)
       }
+    }
+    // Fallback: pick sentences by keyword relevance
+    const sentences = text.split(/[.!?]+/).filter(s => s.length > 50)
+    for (const keyword of keywords) {
+      const relevant = sentences.find(s => s.toLowerCase().includes(keyword))
+      if (relevant) return relevant.trim().slice(0, 500)
     }
     return 'Not mentioned'
   }
 
+  const findMultipleSentences = (keywords: string[], count: number = 2) => {
+    const sentences = text
+      .split(/[.!?]+/)
+      .map(s => s.trim())
+      .filter(s => s.length > 30 && !looksLikeFrontMatter(s))
+    
+    const scored = sentences.map(s => {
+      const lower = s.toLowerCase()
+      const score = keywords.filter(k => lower.includes(k)).length
+      return { sentence: s, score }
+    }).filter(item => item.score > 0).sort((a, b) => b.score - a.score)
+    
+    return scored.slice(0, count).map(item => item.sentence).join(' ').slice(0, 500) || 'Not mentioned'
+  }
+
   return {
-    background: abstract || findSection(['background', 'introduction', 'literature', 'context']),
-    theory: findSection(['theory', 'theoretical', 'hypothesis', 'framework']),
-    methodology: findSection(['method', 'participants', 'procedure', 'design']),
-    measures: findSection(['measure', 'instrument', 'scale', 'assessment']),
-    results: findSection(['result', 'finding', 'analysis', 'significant']),
-    implications: findSection(['implication', 'discussion', 'conclusion']),
-    limitations: findSection(['limitation', 'future research', 'constraint'])
+    background: abstract || findMultipleSentences(['background', 'introduction', 'literature', 'context', 'motivation'], 3),
+    theory: findMultipleSentences(['theory', 'theoretical', 'hypothesis', 'framework', 'model'], 2),
+    methodology: findMultipleSentences(['method', 'participants', 'procedure', 'design', 'sample'], 3),
+    measures: findMultipleSentences(['measure', 'instrument', 'scale', 'assessment', 'questionnaire'], 2),
+    results: findMultipleSentences(['result', 'finding', 'analysis', 'significant', 'effect', 'accuracy'], 3),
+    implications: findMultipleSentences(['implication', 'discussion', 'conclusion', 'contribution', 'practical'], 2),
+    limitations: findMultipleSentences(['limitation', 'future research', 'constraint', 'weakness'], 2)
   }
 }
 

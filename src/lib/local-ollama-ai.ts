@@ -57,8 +57,13 @@ function getClient(settings: OllamaSettings = readOllamaSettings()) {
   return new OllamaClient(settings.baseUrl, settings.model)
 }
 
-function truncatePaperText(text: string, maxLength: number = 12000) {
-  return text.length > maxLength ? text.slice(0, maxLength) : text
+function truncatePaperText(text: string, maxLength: number = 16000) {
+  // Increased from 12000 to preserve more critical information
+  if (text.length <= maxLength) return text
+  // Try to truncate at paragraph boundary
+  const truncated = text.slice(0, maxLength)
+  const lastParagraph = truncated.lastIndexOf('\n\n')
+  return lastParagraph > maxLength * 0.85 ? truncated.slice(0, lastParagraph) : truncated
 }
 
 function readString(value: unknown): string {
@@ -118,14 +123,20 @@ function validateExtractedData(extracted: ExtractedData) {
     extracted.limitations
   ]
 
-  const meaningfulCount = values.filter(value => value && value !== 'Not mentioned' && !looksLikeTemplateOutput(value)).length
+  // Count how many meaningful fields we have
+  const meaningfulCount = values.filter(value => 
+    value && value !== 'Not mentioned' && !looksLikeTemplateOutput(value)
+  ).length
+  
+  // More lenient validation - require only 2 meaningful extractions instead of 3
+  // Also be more lenient with uniqueness - just require at least 2 unique values
   const uniqueCount = new Set(
     values
       .filter(value => value && value !== 'Not mentioned')
       .map(value => value.toLowerCase())
   ).size
 
-  return meaningfulCount >= 3 && uniqueCount >= 3
+  return meaningfulCount >= 2 && uniqueCount >= 2
 }
 
 function normalizeWhitespace(value: string) {
@@ -213,7 +224,22 @@ function takeSentences(text: string, count: number, maxChars: number) {
     return normalizeWhitespace(text).slice(0, maxChars)
   }
 
-  return sentences.join(' ').slice(0, maxChars).split(/(?<=[.!?])\s+/).slice(0, count).join(' ').slice(0, maxChars)
+  // Collect sentences until we reach count or maxChars
+  let result = ''
+  for (let i = 0; i < Math.min(count, sentences.length); i++) {
+    const sentence = sentences[i]
+    if ((result + sentence).length <= maxChars) {
+      result += (result ? ' ' : '') + sentence
+    } else if (result) {
+      break
+    } else {
+      // If single sentence exceeds maxChars, still include it truncated
+      result = sentence.slice(0, maxChars)
+      break
+    }
+  }
+  
+  return result || normalizeWhitespace(text).slice(0, maxChars)
 }
 
 function getSentences(text: string) {
@@ -295,17 +321,19 @@ function buildFocusedPaperContext(text: string, context?: ExtractionContext) {
   }
 
   if (context?.abstract) {
-    parts.push(`Abstract: ${takeSentences(context.abstract, 4, 700)}`)
+    // Increased from 4 to 6 sentences, 700 to 1000 chars
+    parts.push(`Abstract: ${takeSentences(context.abstract, 6, 1000)}`)
   } else {
     const extractedAbstract = extractAbstractBlock(text)
     if (extractedAbstract) {
-      parts.push(`Abstract: ${takeSentences(extractedAbstract, 4, 700)}`)
+      parts.push(`Abstract: ${takeSentences(extractedAbstract, 6, 1000)}`)
     }
   }
 
   for (const config of SECTION_FIELD_CONFIG) {
     let candidate = ''
 
+    // Try to find the section by headings first
     for (const heading of config.headings) {
       const block = sections.get(heading)
       if (block && block.length > 0) {
@@ -314,20 +342,28 @@ function buildFocusedPaperContext(text: string, context?: ExtractionContext) {
       }
     }
 
+    // If not found by headings, search by keywords
     if (!candidate) {
       candidate = findKeywordParagraph(text, config.keywords) || ''
     }
 
+    // If still not found, try to pick sentences by relevance
+    if (!candidate) {
+      candidate = pickSentencesByKeywords(text, config.keywords, 5, 1000) || ''
+    }
+
     if (candidate) {
-      parts.push(`${config.key.toUpperCase()}: ${takeSentences(candidate, 4, 700)}`)
+      // Increased from 4 sentences to 6, and from 700 to 1000 chars
+      parts.push(`${config.key.toUpperCase()}: ${takeSentences(candidate, 6, 1000)}`)
     }
   }
 
   if (parts.length === 0) {
-    parts.push(stripTrailingNoise(text).slice(0, 4000))
+    parts.push(stripTrailingNoise(text).slice(0, 6000))
   }
 
-  return parts.join('\n\n').slice(0, 6000)
+  // Increased from 6000 to 8000 for better context
+  return parts.join('\n\n').slice(0, 8000)
 }
 
 function tryLooseFieldExtraction(raw: string): Record<string, unknown> | null {
@@ -382,6 +418,7 @@ export function extractPaperWithRules(text: string): ExtractedData {
   for (const config of SECTION_FIELD_CONFIG) {
     let candidate = ''
 
+    // First, try to find by section headings
     for (const heading of config.headings) {
       const block = sections.get(heading)
       if (block && block.length > 0) {
@@ -390,19 +427,23 @@ export function extractPaperWithRules(text: string): ExtractedData {
       }
     }
 
-    if (!candidate) {
-      candidate = findKeywordParagraph(referenceSafeText, config.keywords) || ''
-    }
-
+    // For background, use abstract as early fallback
     if (!candidate && config.key === 'background' && abstract) {
       candidate = abstract
     }
 
+    // Second, try keyword paragraph matching
     if (!candidate) {
-      candidate = pickSentencesByKeywords(referenceSafeText, config.keywords, 3, 420) || ''
+      candidate = findKeywordParagraph(referenceSafeText, config.keywords) || ''
     }
 
-    let finalValue = candidate ? takeSentences(candidate, 3, 420) : 'Not mentioned'
+    // Third, try to pick sentences by keyword relevance
+    if (!candidate) {
+      candidate = pickSentencesByKeywords(referenceSafeText, config.keywords, 3, 500) || ''
+    }
+
+    // Increased char limit from 420 to 500 for better extraction
+    let finalValue = candidate ? takeSentences(candidate, 3, 500) : 'Not mentioned'
 
     if (config.key === 'limitations' && finalValue !== 'Not mentioned' && !seemsLikeLimitation(finalValue)) {
       finalValue = 'Not mentioned'
