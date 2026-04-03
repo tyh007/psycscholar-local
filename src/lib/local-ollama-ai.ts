@@ -119,7 +119,13 @@ function validateExtractedData(extracted: ExtractedData) {
   ]
 
   const meaningfulCount = values.filter(value => value && value !== 'Not mentioned' && !looksLikeTemplateOutput(value)).length
-  return meaningfulCount >= 2
+  const uniqueCount = new Set(
+    values
+      .filter(value => value && value !== 'Not mentioned')
+      .map(value => value.toLowerCase())
+  ).size
+
+  return meaningfulCount >= 3 && uniqueCount >= 3
 }
 
 function normalizeWhitespace(value: string) {
@@ -208,6 +214,58 @@ function takeSentences(text: string, count: number, maxChars: number) {
   }
 
   return sentences.join(' ').slice(0, maxChars).split(/(?<=[.!?])\s+/).slice(0, count).join(' ').slice(0, maxChars)
+}
+
+function getSentences(text: string) {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map(sentence => normalizeWhitespace(sentence))
+    .filter(sentence => sentence.length > 20)
+    .filter(sentence => !isNoiseLine(sentence))
+    .filter(sentence => !/^(copyright|permission to make|references)\b/i.test(sentence))
+}
+
+function scoreSentence(sentence: string, keywords: string[]) {
+  const lower = sentence.toLowerCase()
+  let score = 0
+  for (const keyword of keywords) {
+    if (lower.includes(keyword)) score += 1
+  }
+  if (/\bwe (propose|conduct|test|examine|investigate|evaluate|show|find)\b/.test(lower)) score += 0.5
+  if (/\bparticipants?\b|\bsample\b|\bexperiment\b|\bstudy\b/.test(lower)) score += 0.5
+  if (/\bresults?\b|\bfindings?\b|\bsignificant\b|\bimproved?\b/.test(lower)) score += 0.5
+  return score
+}
+
+function pickSentencesByKeywords(text: string, keywords: string[], count: number, maxChars: number) {
+  const sentences = getSentences(text)
+    .map(sentence => ({ sentence, score: scoreSentence(sentence, keywords) }))
+    .filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+
+  if (sentences.length === 0) return undefined
+
+  const picked: string[] = []
+  for (const item of sentences) {
+    if (!picked.includes(item.sentence)) {
+      picked.push(item.sentence)
+    }
+    if (picked.length >= count) break
+  }
+
+  return picked.join(' ').slice(0, maxChars)
+}
+
+function seemsLikeLimitation(text: string) {
+  const lower = text.toLowerCase()
+  return /\b(limitation|limitations|future work|future research|constraint|caution|generalizability)\b/.test(lower)
+}
+
+function dedupeField(value: string, usedValues: Set<string>) {
+  const normalized = value.toLowerCase()
+  if (usedValues.has(normalized)) return 'Not mentioned'
+  usedValues.add(normalized)
+  return value
 }
 
 function findKeywordParagraph(text: string, keywords: string[]) {
@@ -317,7 +375,9 @@ function isUsableSectionParagraph(paragraph: string) {
 export function extractPaperWithRules(text: string): ExtractedData {
   const sections = collectSectionBlocks(text)
   const abstract = extractAbstractBlock(text)
+  const referenceSafeText = stripTrailingNoise(text)
   const output = {} as Record<SectionField, string>
+  const usedValues = new Set<string>()
 
   for (const config of SECTION_FIELD_CONFIG) {
     let candidate = ''
@@ -331,14 +391,31 @@ export function extractPaperWithRules(text: string): ExtractedData {
     }
 
     if (!candidate) {
-      candidate = findKeywordParagraph(text, config.keywords) || ''
+      candidate = findKeywordParagraph(referenceSafeText, config.keywords) || ''
     }
 
     if (!candidate && config.key === 'background' && abstract) {
       candidate = abstract
     }
 
-    output[config.key] = candidate ? takeSentences(candidate, 3, 420) : 'Not mentioned'
+    if (!candidate) {
+      candidate = pickSentencesByKeywords(referenceSafeText, config.keywords, 3, 420) || ''
+    }
+
+    let finalValue = candidate ? takeSentences(candidate, 3, 420) : 'Not mentioned'
+
+    if (config.key === 'limitations' && finalValue !== 'Not mentioned' && !seemsLikeLimitation(finalValue)) {
+      finalValue = 'Not mentioned'
+    }
+
+    if (config.key === 'implications' && finalValue !== 'Not mentioned') {
+      const lower = finalValue.toLowerCase()
+      if (!/\b(implication|implications|suggest|contribution|practical|application|useful|improve)\b/.test(lower)) {
+        finalValue = 'Not mentioned'
+      }
+    }
+
+    output[config.key] = finalValue === 'Not mentioned' ? finalValue : dedupeField(finalValue, usedValues)
   }
 
   return output
