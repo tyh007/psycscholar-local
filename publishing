@@ -1,0 +1,12 @@
+cd "/Users/yht/Library/CloudStorage/OneDrive-Personal/School Works/BSc Y1 T1 & T2/Personal Projects/Literature/psycscholar-local"
+
+git status --short
+
+npm run build
+
+git add .
+git commit -m "update latest changes"
+
+git push origin HEAD:main
+
+npx vercel --prod --yes

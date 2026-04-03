@@ -141,24 +141,63 @@ function getEditDistance(a: string, b: string): number {
 function formatAsBulletPoints(text: string, maxBullets: number = 3): string {
   if (!text || text === 'Not mentioned') return 'Not mentioned'
   
+  // If already formatted as bullets, verify and clean
+  if (text.includes('•')) {
+    const bullets = text.split('\n').filter(line => line.trim().startsWith('•'))
+    if (bullets.length > 0) {
+      // Remove duplicates and limit
+      const seen = new Set<string>()
+      const unique: string[] = []
+      for (const bullet of bullets) {
+        const normalized = bullet.toLowerCase()
+        if (!seen.has(normalized)) {
+          seen.add(normalized)
+          unique.push(bullet)
+        }
+      }
+      return unique.slice(0, maxBullets).join('\n')
+    }
+  }
+  
   // Clean the text first
   const cleaned = cleanAndNormalizeText(text)
   
-  // Split into sentences, filtering duplicates
+  // Split into sentences, filtering duplicates and noise
   const sentences = cleaned
     .split(/(?<=[.!?])\s+/)
     .map(s => s.trim())
-    .filter(s => s.length > 25 && !s.match(/^(fig|table|ref|page|www|http)/i))
+    .filter(s => {
+      // Minimum length 25 chars
+      if (s.length < 25) return false
+      // Filter out common artifacts
+      if (/^(fig|table|ref|page|www|http|author|affiliation)/i.test(s)) return false
+      // Filter incomplete sentences
+      if (s.endsWith('...') || s.endsWith('–')) return false
+      return true
+    })
   
   if (sentences.length === 0) return 'Not mentioned'
   
-  // Deduplicate sentences
+  // Deduplicate sentences with better matching
   const seenSentences = new Set<string>()
   const uniqueSentences: string[] = []
   
   for (const sentence of sentences) {
     const normalized = sentence.toLowerCase()
-    if (!seenSentences.has(normalized)) {
+    
+    // Check for exact duplicates
+    if (seenSentences.has(normalized)) continue
+    
+    // Check for partial duplicates (>80% similarity)
+    let isDuplicate = false
+    for (const seen of seenSentences) {
+      if (calculateStringSimilarity(normalized, seen) > 0.80) {
+        isDuplicate = true
+        break
+      }
+    }
+    
+    if (!isDuplicate) {
       seenSentences.add(normalized)
       uniqueSentences.push(sentence)
     }
@@ -360,18 +399,37 @@ function ensureString(value: unknown) {
   return trimmed || 'Not mentioned'
 }
 
+// Ensure all extracted values are formatted as bullet points
+function ensureFormattedString(value: string): string {
+  if (value === 'Not mentioned' || !value) return 'Not mentioned'
+  
+  // If already contains bullets, return as-is
+  if (value.includes('•')) return value
+  
+  // Otherwise format as bullet points
+  return formatAsBulletPoints(value, 3)
+}
+
 function mapParsedExtraction(
   parsed: Record<string, unknown>,
   customFields?: CustomFieldDefinition[]
 ): ExtractedData {
   const baseData = Object.fromEntries(
-    BASE_FIELDS.map((field) => [field, ensureString(parsed[field])])
+    BASE_FIELDS.map((field) => {
+      const rawValue = ensureString(parsed[field])
+      // Apply formatting to ensure bullet points
+      const formattedValue = ensureFormattedString(rawValue)
+      return [field, formattedValue]
+    })
   ) as Record<BaseField, string>
 
   const extractedCustomFields = customFields?.length
     ? Object.fromEntries(
         customFields
-          .map((field) => [field.id, ensureString(parsed[field.id])])
+          .map((field) => {
+            const rawValue = ensureString(parsed[field.id])
+            return [field.id, ensureFormattedString(rawValue)]
+          })
           .filter(([, value]) => value !== 'Not mentioned')
       )
     : undefined

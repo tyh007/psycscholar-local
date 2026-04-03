@@ -70,6 +70,17 @@ function readString(value: unknown): string {
   return typeof value === 'string' && value.trim() ? value.trim() : 'Not mentioned'
 }
 
+// Ensure all extracted values are formatted as bullet points
+function ensureFormattedString(value: string): string {
+  if (value === 'Not mentioned' || !value) return 'Not mentioned'
+  
+  // If already contains bullets, return as-is
+  if (value.includes('•')) return value
+  
+  // Otherwise format as bullet points
+  return formatAsBulletPoints(value, 3)
+}
+
 function parseExtractionResponse(parsed: Record<string, unknown>): ExtractedData {
   const reserved = new Set([
     'background',
@@ -83,16 +94,17 @@ function parseExtractionResponse(parsed: Record<string, unknown>): ExtractedData
 
   const customEntries = Object.entries(parsed)
     .filter(([key, value]) => !reserved.has(key) && typeof value === 'string')
-    .map(([key, value]) => [key, String(value).trim()])
+    .map(([key, value]) => [key, ensureFormattedString(String(value).trim())])
+    .filter(([, value]) => value !== 'Not mentioned')
 
   return {
-    background: readString(parsed.background),
-    theory: readString(parsed.theory),
-    methodology: readString(parsed.methodology),
-    measures: readString(parsed.measures),
-    results: readString(parsed.results),
-    implications: readString(parsed.implications),
-    limitations: readString(parsed.limitations),
+    background: ensureFormattedString(readString(parsed.background)),
+    theory: ensureFormattedString(readString(parsed.theory)),
+    methodology: ensureFormattedString(readString(parsed.methodology)),
+    measures: ensureFormattedString(readString(parsed.measures)),
+    results: ensureFormattedString(readString(parsed.results)),
+    implications: ensureFormattedString(readString(parsed.implications)),
+    limitations: ensureFormattedString(readString(parsed.limitations)),
     customFields: customEntries.length > 0 ? Object.fromEntries(customEntries) : undefined
   }
 }
@@ -418,11 +430,37 @@ function isUsableSectionParagraph(paragraph: string) {
 function formatAsBulletPoints(text: string, maxBullets: number = 3): string {
   if (!text || text === 'Not mentioned') return 'Not mentioned'
   
-  // Split into sentences, filtering duplicates  
+  // If already formatted as bullets, verify and clean
+  if (text.includes('•')) {
+    const bullets = text.split('\n').filter(line => line.trim().startsWith('•'))
+    if (bullets.length > 0) {
+      // Remove duplicates and limit
+      const seen = new Set<string>()
+      const unique: string[] = []
+      for (const bullet of bullets) {
+        const normalized = bullet.toLowerCase()
+        if (!seen.has(normalized)) {
+          seen.add(normalized)
+          unique.push(bullet)
+        }
+      }
+      return unique.slice(0, maxBullets).join('\n')
+    }
+  }
+  
+  // Split into sentences, filtering duplicates and noise
   const sentences = text
     .split(/(?<=[.!?])\s+/)
     .map(s => s.trim())
-    .filter(s => s.length > 25 && !s.match(/^(fig|table|ref|page|www|http)/i))
+    .filter(s => {
+      // Minimum length 25 chars
+      if (s.length < 25) return false
+      // Filter out common artifacts
+      if (/^(fig|table|ref|page|www|http|author|affiliation)/i.test(s)) return false
+      // Filter incomplete sentences
+      if (s.endsWith('...') || s.endsWith('–')) return false
+      return true
+    })
   
   if (sentences.length === 0) return 'Not mentioned'
   
