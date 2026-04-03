@@ -9,9 +9,9 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { 
+  ArrowLeftRight,
   BarChart3, 
   Brain, 
-  Compare, 
   FileText, 
   Lightbulb,
   Loader2,
@@ -43,7 +43,7 @@ const analysisTemplates = [
     id: 'methodology-comparison',
     name: 'Methodology Comparison',
     description: 'Compare research methods and designs',
-    icon: <Compare className="h-4 w-4" />,
+    icon: <ArrowLeftRight className="h-4 w-4" />,
     question: 'Compare and contrast the methodologies used across these studies. Identify similarities and differences in research designs, sample characteristics, measurement approaches, and statistical analyses.'
   },
   {
