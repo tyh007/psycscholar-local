@@ -121,9 +121,35 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer components {
+  .academic-gradient {
+    background: linear-gradient(135deg, 
+      hsl(220, 14%, 96%) 0%, 
+      hsl(220, 13%, 91%) 100%);
+  }
+  
+  .psyc-grid {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+  
+  .sidebar-academic {
+    background: linear-gradient(180deg, 
+      hsl(220, 14%, 98%) 0%, 
+      hsl(220, 14%, 95%) 100%);
+  }
+  
+  .paper-card {
+    @apply bg-card/80 backdrop-blur-sm border border-border/50 shadow-sm;
+  }
+  
+  .extracted-text {
+    @apply font-mono text-sm bg-muted/30 p-3 rounded-md border-l-4 border-primary/30;
   }
 }
