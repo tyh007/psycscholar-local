@@ -7,10 +7,11 @@ async function initializePDFJS() {
     try {
       console.log('Attempting to import pdfjs-dist...')
       const pdfjs = await import('pdfjs-dist')
+      const pdfjsModule = pdfjs as any
       console.log('pdfjs-dist imported:', pdfjs)
       
       // Try different ways to access the PDF.js library
-      pdfjsLib = pdfjs.default || pdfjs.pdfjsLib || pdfjs
+      pdfjsLib = pdfjsModule.default || pdfjsModule.pdfjsLib || pdfjsModule
       
       console.log('pdfjsLib after assignment:', pdfjsLib)
       
