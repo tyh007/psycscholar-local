@@ -15,13 +15,13 @@ export interface CustomFieldDefinition {
 
 export class PromptBuilder {
   private static readonly FIELD_GUIDANCE: Record<string, string> = {
-    background: 'Research context, problem statement, and why the study matters. Mention the gap addressed.',
-    theory: 'Theoretical framework, key hypotheses, or conceptual propositions tested.',
-    methodology: 'Research design, sample, procedures, and analyses.',
-    measures: 'Scales, instruments, tasks, or operationalisations used.',
-    results: 'Main findings, statistical patterns, and substantive conclusions.',
-    implications: 'Theoretical or practical implications and contributions.',
-    limitations: 'Limitations, caveats, or future research directions.'
+    background: 'Research context, problem statement, and why the study matters. Format as bullet points: • Key point 1, • Key point 2, etc.',
+    theory: 'Theoretical framework, key hypotheses, or conceptual propositions tested. Use bullet point format.',
+    methodology: 'Research design, sample, procedures, and analyses. Present as bullet points covering each aspect.',
+    measures: 'Scales, instruments, tasks, or operationalisations used. List each measure as a bullet point.',
+    results: 'Main findings, statistical patterns, and substantive conclusions. Format as distinct bullet points.',
+    implications: 'Theoretical or practical implications and contributions. Present as bullet points.',
+    limitations: 'Limitations, caveats, or future research directions. Use bullet point format for clarity.'
   }
 
   private static readonly BASE_SYSTEM_PROMPT = `You are a highly skilled academic researcher and psychologist with expertise in quantitative and qualitative research methods. Your task is to carefully analyze psychology research papers and extract structured information with precision and accuracy.
@@ -34,7 +34,13 @@ Guidelines:
 5. Pay attention to sample sizes, statistical values, and methodological details
 6. Preserve the original meaning and context of the research`
 
-  private static readonly BRIEF_MODE_INSTRUCTIONS = `Provide concise, bullet-point style responses focusing on the most essential information. Limit each field to 1-2 sentences or 3-4 bullet points maximum.`
+  private static readonly BRIEF_MODE_INSTRUCTIONS = `Provide concise, bullet-point style responses focusing on the most essential information. 
+For each field, format your response as:
+- Use bullet points (•) for key items
+- Keep each bullet point to 1 sentence maximum
+- Aim for 2-4 bullet points per field
+- Be specific and avoid repetition
+- If no information available, respond with exactly: "Not mentioned"`
 
   private static readonly DETAILED_MODE_INSTRUCTIONS = `Provide comprehensive, detailed responses including specific statistics, methodological details, and nuanced findings. Include relevant quotes or specific details from the text when available.`
 
@@ -97,11 +103,15 @@ ${fieldDescriptions}
 Return valid JSON only using exactly these keys:
 ${outputTemplate}
 
-Important:
-- Replace every empty string with real paper-specific content.
-- Do not copy the field descriptions above.
-- If a field is truly unavailable, use "Not mentioned".
-- Do not include any explanations, markdown, or extra keys.`
+Output format instructions:
+- For brief mode: Each field value should be well-formatted bullets separated by newlines, starting with "• "
+- Example: "• First key finding\n• Second key finding\n• Third key finding"
+- Do NOT include markdown code blocks or extra formatting
+- Replace every empty string with real paper-specific content
+- Do not copy the field descriptions above
+- If a field is truly unavailable, use exactly: "Not mentioned"
+- Do not include any explanations or extra keys
+- Ensure NO text is truncated or incomplete`
 
     return {
       systemPrompt,

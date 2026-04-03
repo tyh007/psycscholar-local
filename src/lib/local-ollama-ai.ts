@@ -408,6 +408,26 @@ function isUsableSectionParagraph(paragraph: string) {
   return true
 }
 
+// Format text into bullet points
+function formatAsBulletPoints(text: string, maxBullets: number = 3): string {
+  if (!text || text === 'Not mentioned') return 'Not mentioned'
+  
+  // Split sentences
+  const sentences = text
+    .split(/(?<=[.!?])\s+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 20)
+  
+  if (sentences.length === 0) return 'Not mentioned'
+  
+  // Take top sentences as bullet points
+  const bullets = sentences.slice(0, maxBullets)
+    .map(s => `• ${s}`)
+    .join('\n')
+  
+  return bullets || text.slice(0, 200)
+}
+
 export function extractPaperWithRules(text: string): ExtractedData {
   const sections = collectSectionBlocks(text)
   const abstract = extractAbstractBlock(text)
@@ -456,7 +476,12 @@ export function extractPaperWithRules(text: string): ExtractedData {
       }
     }
 
-    output[config.key] = finalValue === 'Not mentioned' ? finalValue : dedupeField(finalValue, usedValues)
+    // Format as bullet points for better presentation
+    const formattedValue = finalValue === 'Not mentioned' 
+      ? finalValue 
+      : formatAsBulletPoints(dedupeField(finalValue, usedValues), 3)
+    
+    output[config.key] = formattedValue
   }
 
   return output

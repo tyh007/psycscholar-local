@@ -60,6 +60,26 @@ function slicePaperText(text: string, maxChars = 25000) {
   return lastNewline > maxChars * 0.8 ? sliced.slice(0, lastNewline) : sliced
 }
 
+// Format text into bullet points
+function formatAsBulletPoints(text: string, maxBullets: number = 3): string {
+  if (!text || text === 'Not mentioned') return 'Not mentioned'
+  
+  // Split sentences
+  const sentences = text
+    .split(/(?<=[.!?])\s+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 20)
+  
+  if (sentences.length === 0) return 'Not mentioned'
+  
+  // Take top sentences as bullet points
+  const bullets = sentences.slice(0, maxBullets)
+    .map(s => `• ${s}`)
+    .join('\n')
+  
+  return bullets || text.slice(0, 200)
+}
+
 function extractWithRules(text: string): ExtractedData {
   const paragraphs = text
     .split(/\n\n+/)
@@ -99,17 +119,20 @@ function extractWithRules(text: string): ExtractedData {
       return { sentence: s, score }
     }).filter(item => item.score > 0).sort((a, b) => b.score - a.score)
     
-    return scored.slice(0, count).map(item => item.sentence).join(' ').slice(0, 500) || 'Not mentioned'
+    const result = scored.slice(0, count).map(item => item.sentence).join(' ').slice(0, 500) || 'Not mentioned'
+    return result
   }
 
+  const formatResult = (result: string): string => formatAsBulletPoints(result, 3)
+
   return {
-    background: abstract || findMultipleSentences(['background', 'introduction', 'literature', 'context', 'motivation'], 3),
-    theory: findMultipleSentences(['theory', 'theoretical', 'hypothesis', 'framework', 'model'], 2),
-    methodology: findMultipleSentences(['method', 'participants', 'procedure', 'design', 'sample'], 3),
-    measures: findMultipleSentences(['measure', 'instrument', 'scale', 'assessment', 'questionnaire'], 2),
-    results: findMultipleSentences(['result', 'finding', 'analysis', 'significant', 'effect', 'accuracy'], 3),
-    implications: findMultipleSentences(['implication', 'discussion', 'conclusion', 'contribution', 'practical'], 2),
-    limitations: findMultipleSentences(['limitation', 'future research', 'constraint', 'weakness'], 2)
+    background: formatResult(abstract || findMultipleSentences(['background', 'introduction', 'literature', 'context', 'motivation'], 3)),
+    theory: formatResult(findMultipleSentences(['theory', 'theoretical', 'hypothesis', 'framework', 'model'], 3)),
+    methodology: formatResult(findMultipleSentences(['method', 'participants', 'procedure', 'design', 'sample'], 3)),
+    measures: formatResult(findMultipleSentences(['measure', 'instrument', 'scale', 'assessment', 'questionnaire'], 3)),
+    results: formatResult(findMultipleSentences(['result', 'finding', 'analysis', 'significant', 'effect', 'accuracy'], 3)),
+    implications: formatResult(findMultipleSentences(['implication', 'discussion', 'conclusion', 'contribution', 'practical'], 3)),
+    limitations: formatResult(findMultipleSentences(['limitation', 'future research', 'constraint', 'weakness'], 3))
   }
 }
 
