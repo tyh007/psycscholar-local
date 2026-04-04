@@ -832,49 +832,49 @@ export function MainContent({
                       </td>
                       <td className="p-4 align-top" style={{ width: `${columnWidths.background}px` }}>
                         <div className="max-w-full">
-                          <p className="text-sm text-muted-foreground whitespace-normal break-words leading-6">
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words leading-6">
                             {paper.extractedData?.background || 'Not extracted'}
                           </p>
                         </div>
                       </td>
                       <td className="p-4 align-top" style={{ width: `${columnWidths.theory}px` }}>
                         <div className="max-w-full">
-                          <p className="text-sm text-muted-foreground whitespace-normal break-words leading-6">
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words leading-6">
                             {paper.extractedData?.theory || 'Not extracted'}
                           </p>
                         </div>
                       </td>
                       <td className="p-4 align-top" style={{ width: `${columnWidths.methodology}px` }}>
                         <div className="max-w-full">
-                          <p className="text-sm text-muted-foreground whitespace-normal break-words leading-6">
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words leading-6">
                             {paper.extractedData?.methodology || 'Not extracted'}
                           </p>
                         </div>
                       </td>
                       <td className="p-4 align-top" style={{ width: `${columnWidths.measures}px` }}>
                         <div className="max-w-full">
-                          <p className="text-sm text-muted-foreground whitespace-normal break-words leading-6">
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words leading-6">
                             {paper.extractedData?.measures || 'Not extracted'}
                           </p>
                         </div>
                       </td>
                       <td className="p-4 align-top" style={{ width: `${columnWidths.results}px` }}>
                         <div className="max-w-full">
-                          <p className="text-sm text-muted-foreground whitespace-normal break-words leading-6">
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words leading-6">
                             {paper.extractedData?.results || 'Not extracted'}
                           </p>
                         </div>
                       </td>
                       <td className="p-4 align-top" style={{ width: `${columnWidths.implications}px` }}>
                         <div className="max-w-full">
-                          <p className="text-sm text-muted-foreground whitespace-normal break-words leading-6">
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words leading-6">
                             {paper.extractedData?.implications || 'Not extracted'}
                           </p>
                         </div>
                       </td>
                       <td className="p-4 align-top" style={{ width: `${columnWidths.limitations}px` }}>
                         <div className="max-w-full">
-                          <p className="text-sm text-muted-foreground whitespace-normal break-words leading-6">
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words leading-6">
                             {paper.extractedData?.limitations || 'Not extracted'}
                           </p>
                         </div>

@@ -74,14 +74,26 @@ function readString(value: unknown): string {
 function ensureFormattedString(value: string): string {
   if (value === 'Not mentioned' || !value) return 'Not mentioned'
   
-  // Normalize all bullet formats to •
+  // First, handle any escaped newline sequences that might be in the string
   let normalized = value
+    .replace(/\\n/g, '\n')         // Convert escaped \\n to actual newlines
+    .replace(/\\r/g, '')           // Remove escaped carriage returns
     .replace(/^[-–•]\s*/gm, '• ')  // Replace all bullet types with •
     .replace(/\n\n+/g, '\n')       // Remove extra blank lines
     .trim()
   
-  // If already contains bullets, keep as-is
-  if (normalized.includes('•')) return normalized
+  // If already contains bullets, ensure they're on separate lines
+  if (normalized.includes('•')) {
+    const lines = normalized.split('\n').map(line => line.trim()).filter(line => line.length > 0)
+    if (lines.length > 1) {
+      // Multiple lines - ensure each starts with •
+      return lines.map(line => {
+        const cleaned = line.replace(/^[-–•]\s*/, '')
+        return cleaned.startsWith('•') ? line : `• ${cleaned}`
+      }).join('\n')
+    }
+    return normalized
+  }
   
   // Otherwise format as bullet points
   return formatAsBulletPoints(value, 3)
