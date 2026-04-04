@@ -1,5 +1,5 @@
 import { type ExtractedPaperData } from '@/lib/ai-extraction-types'
-import { extractPaperWithRules } from '@/lib/local-ollama-ai'
+import { extractPaperWithRules, extractPaperWithLocalOllama } from '@/lib/local-ollama-ai'
 import { getAIProviderConfig, getGeminiApiKey } from '@/lib/ai-provider-config'
 
 class UnifiedExtractionService {
@@ -15,10 +15,10 @@ class UnifiedExtractionService {
     if (aiConfig.provider === 'ollama') {
       console.log('Attempting Ollama extraction (local)...')
       try {
-        const fallback = extractPaperWithRules(text)
+        const ollamaResult = await extractPaperWithLocalOllama(text)
         console.log('Local Ollama extraction successful')
         return { 
-          data: fallback, 
+          data: ollamaResult.extractedData, 
           method: 'Local Ollama'
         }
       } catch (error) {
