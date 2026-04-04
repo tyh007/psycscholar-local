@@ -196,6 +196,9 @@ interface MainContentProps {
   onPaperMoveToTrash?: (paperId: string) => void
   onPaperRestore?: (paperId: string) => void
   onPaperPermanentDelete?: (paperId: string) => void
+  onPaperBatchDelete?: (paperIds: string[]) => void
+  onPaperBatchRestore?: (paperIds: string[]) => void
+  onPaperClearAllTrash?: () => void
   onRefresh?: () => void
   aiState?: {
     isAvailable: boolean
@@ -229,6 +232,9 @@ export function MainContent({
   onPaperMoveToTrash,
   onPaperRestore,
   onPaperPermanentDelete,
+  onPaperBatchDelete,
+  onPaperBatchRestore,
+  onPaperClearAllTrash,
   onRefresh,
   aiState,
   globalDetailLevel = 50,
@@ -244,8 +250,6 @@ export function MainContent({
   onAIRetry,
   onOpenAISettings
 }: MainContentProps) {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [detailLevel, setDetailLevel] = useState([globalDetailLevel]) // 0 = brief, 100 = detailed
   const [isDragging, setIsDragging] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [customFieldOpen, setCustomFieldOpen] = useState(false)
@@ -256,6 +260,10 @@ export function MainContent({
   const [appliedYearMin, setAppliedYearMin] = useState('')
   const [appliedYearMax, setAppliedYearMax] = useState('')
   const [appliedKeyword, setAppliedKeyword] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedPaperIds, setSelectedPaperIds] = useState<Set<string>>(new Set())
+  const [showBatchDeleteDialog, setShowBatchDeleteDialog] = useState(false)
+  const [confirmBatchDelete, setConfirmBatchDelete] = useState(false)
   const [binDialogOpen, setBinDialogOpen] = useState(false)
   const [binTargetId, setBinTargetId] = useState<string | null>(null)
   const [confirmMoveToBin, setConfirmMoveToBin] = useState(false)
@@ -263,6 +271,7 @@ export function MainContent({
   const [permanentTargetId, setPermanentTargetId] = useState<string | null>(null)
   const [confirmPermanentDelete, setConfirmPermanentDelete] = useState(false)
   const [columnWidths, setColumnWidths] = useState<Record<ColumnKey, number>>(DEFAULT_COLUMN_WIDTHS)
+  const [detailLevel, setDetailLevel] = useState<number[]>([globalDetailLevel])
   const resizeStateRef = useRef<{
     key: ColumnKey
     startX: number
@@ -330,6 +339,53 @@ export function MainContent({
     }
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
+  }
+
+  const handleTogglePaperSelection = (paperId: string | number | undefined) => {
+    if (!paperId) return
+    const id = String(paperId)
+    setSelectedPaperIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allIds = new Set(filteredPapers.map(p => String(p.id)))
+      setSelectedPaperIds(allIds)
+    } else {
+      setSelectedPaperIds(new Set())
+    }
+  }
+
+  const handleBatchDelete = () => {
+    if (selectedPaperIds.size === 0) return
+    if (isTrashView) {
+      onPaperBatchDelete?.(Array.from(selectedPaperIds))
+    } else {
+      selectedPaperIds.forEach(id => onPaperMoveToTrash?.(id))
+    }
+    setSelectedPaperIds(new Set())
+    setShowBatchDeleteDialog(false)
+    setConfirmBatchDelete(false)
+  }
+
+  const handleBatchRestore = () => {
+    if (selectedPaperIds.size === 0 || !isTrashView) return
+    onPaperBatchRestore?.(Array.from(selectedPaperIds))
+    setSelectedPaperIds(new Set())
+  }
+
+  const handleClearAllTrash = () => {
+    const allIds = filteredPapers.map(p => String(p.id))
+    onPaperClearAllTrash?.()
+    setSelectedPaperIds(new Set())
   }
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -460,7 +516,75 @@ export function MainContent({
             </div>
             <p className="text-sm text-muted-foreground">
               {isTrashView ? `${papers.length} in recycle bin` : `${papers.length} papers`}
+              {selectedPaperIds.size > 0 && ` • ${selectedPaperIds.size} selected`}
             </p>
+            {selectedPaperIds.size > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                {isTrashView && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      type="button"
+                      onClick={handleBatchRestore}
+                    >
+                      <ArchiveRestore className="h-4 w-4 mr-2" />
+                      Restore Selected ({selectedPaperIds.size})
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      type="button"
+                      onClick={() => {
+                        setShowBatchDeleteDialog(true)
+                        setConfirmBatchDelete(false)
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Permanently ({selectedPaperIds.size})
+                    </Button>
+                  </>
+                )}
+                {!isTrashView && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    type="button"
+                    onClick={() => {
+                      setShowBatchDeleteDialog(true)
+                      setConfirmBatchDelete(false)
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Move to Trash ({selectedPaperIds.size})
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  type="button"
+                  onClick={() => setSelectedPaperIds(new Set())}
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
+            {isTrashView && papers.length > 0 && selectedPaperIds.size === 0 && (
+              <Button
+                size="sm"
+                variant="destructive"
+                type="button"
+                onClick={() => {
+                  // Select all first
+                  handleSelectAll(true)
+                  // Then show delete dialog
+                  setTimeout(() => setShowBatchDeleteDialog(true), 0)
+                }}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Clear All Recycle Bin
+              </Button>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Button
@@ -640,6 +764,12 @@ export function MainContent({
               <table className="w-full table-fixed psyc-grid" style={{ minWidth: `${tableMinWidth}px` }}>
                 <thead className="sticky top-0 bg-background border-b border-border">
                   <tr>
+                    <th className="text-left p-4 font-medium text-sm text-muted-foreground w-10">
+                      <Checkbox
+                        checked={filteredPapers.length > 0 && selectedPaperIds.size === filteredPapers.length}
+                        onCheckedChange={handleSelectAll}
+                      />
+                    </th>
                     {GRID_DATA_COLUMNS.map(column => (
                       <th
                         key={column.key}
@@ -681,6 +811,12 @@ export function MainContent({
                 <tbody>
                   {filteredPapers.map((paper, index) => (
                     <tr key={`${paper.id}-${paper.extractedData?.background ? 'with-data' : 'no-data'}-${index}`} className="border-b border-border align-top hover:bg-muted/30">
+                      <td className="p-4 align-top w-10">
+                        <Checkbox
+                          checked={selectedPaperIds.has(String(paper.id))}
+                          onCheckedChange={() => handleTogglePaperSelection(paper.id)}
+                        />
+                      </td>
                       <td className="p-4 align-top" style={{ width: `${columnWidths.title}px` }}>
                         <div className="max-w-full">
                           <p className="text-sm font-medium whitespace-normal break-words leading-6">{paper.title || paper.fileName}</p>
@@ -911,6 +1047,48 @@ export function MainContent({
         papers={papers}
         customFields={customFieldDefinitions}
       />
+
+      <Dialog open={showBatchDeleteDialog} onOpenChange={setShowBatchDeleteDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {isTrashView ? 'Delete permanently' : 'Move to recycle bin'}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {isTrashView 
+              ? `This will permanently delete ${selectedPaperIds.size} paper(s). This cannot be undone.`
+              : `This will move ${selectedPaperIds.size} paper(s) to the recycle bin.`
+            }
+          </p>
+          <div className="flex items-center gap-2 py-2">
+            <Checkbox
+              id="confirm-batch-delete"
+              checked={confirmBatchDelete}
+              onCheckedChange={(v) => setConfirmBatchDelete(v === true)}
+            />
+            <Label htmlFor="confirm-batch-delete" className="text-sm leading-snug">
+              {isTrashView 
+                ? 'I confirm I want to delete these papers permanently'
+                : 'I confirm I want to move these papers to the recycle bin'
+              }
+            </Label>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => setShowBatchDeleteDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant={isTrashView ? 'destructive' : 'default'}
+              disabled={!confirmBatchDelete}
+              onClick={handleBatchDelete}
+            >
+              {isTrashView ? 'Delete Permanently' : 'Move to Trash'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={binDialogOpen} onOpenChange={setBinDialogOpen}>
         <DialogContent className="sm:max-w-md">

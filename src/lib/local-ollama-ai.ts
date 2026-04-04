@@ -18,38 +18,38 @@ type ExtractionContext = {
 const SECTION_FIELD_CONFIG: Array<{ key: SectionField; headings: string[]; keywords: string[] }> = [
   {
     key: 'background',
-    headings: ['abstract', 'introduction', 'background', 'related work', 'literature review'],
-    keywords: ['background', 'introduction', 'motivation', 'problem', 'context', 'related work', 'literature']
+    headings: ['abstract', 'introduction', 'background', 'related work', 'literature review', 'literature'],
+    keywords: ['background', 'introduction', 'motivation', 'problem', 'context', 'related work', 'literature', 'prior work']
   },
   {
     key: 'theory',
-    headings: ['theory', 'theoretical framework', 'conceptual framework', 'hypotheses'],
-    keywords: ['theory', 'framework', 'hypothesis', 'mechanism', 'conceptual']
+    headings: ['theory', 'theoretical framework', 'conceptual framework', 'hypotheses', 'literature review', 'conceptual background', 'theoretical background', 'framework'],
+    keywords: ['theory', 'framework', 'hypothesis', 'mechanism', 'conceptual', 'theoretical', 'model', 'proposition']
   },
   {
     key: 'methodology',
-    headings: ['method', 'methods', 'methodology', 'participants', 'procedure', 'study design'],
-    keywords: ['method', 'methods', 'methodology', 'participants', 'procedure', 'design', 'experiment', 'study']
+    headings: ['method', 'methods', 'methodology', 'participants', 'procedure', 'study design', 'research design', 'experimental design', 'approach'],
+    keywords: ['method', 'methods', 'methodology', 'participants', 'procedure', 'design', 'experiment', 'study', 'approach', 'participants']
   },
   {
     key: 'measures',
-    headings: ['measures', 'materials', 'instruments'],
-    keywords: ['measure', 'measures', 'instrument', 'scale', 'questionnaire', 'survey', 'assessment']
+    headings: ['measures', 'materials', 'instruments', 'materials and methods', 'data collection', 'measurement', 'apparatus', 'tools'],
+    keywords: ['measure', 'measures', 'instrument', 'scale', 'questionnaire', 'survey', 'assessment', 'operationali', 'apparatus', 'tool']
   },
   {
     key: 'results',
-    headings: ['results', 'findings', 'analysis'],
-    keywords: ['result', 'results', 'findings', 'analysis', 'significant', 'effect', 'accuracy']
+    headings: ['results', 'findings', 'analysis', 'findings and results', 'outcomes'],
+    keywords: ['result', 'results', 'findings', 'analysis', 'significant', 'effect', 'accuracy', 'outcome', 'correlation']
   },
   {
     key: 'implications',
-    headings: ['discussion', 'conclusion', 'implications'],
-    keywords: ['discussion', 'conclusion', 'implication', 'implications', 'contribution', 'practical']
+    headings: ['discussion', 'conclusion', 'implications', 'conclusions', 'discussion and implications'],
+    keywords: ['discussion', 'conclusion', 'implication', 'implications', 'contribution', 'practical', 'theoretical contribution', 'significance']
   },
   {
     key: 'limitations',
-    headings: ['limitations', 'future work', 'future research'],
-    keywords: ['limitation', 'limitations', 'future work', 'future research', 'constraint']
+    headings: ['limitations', 'future work', 'future research', 'limitation'],
+    keywords: ['limitation', 'limitations', 'future work', 'future research', 'constraint', 'constraint', 'generalizability', 'limitation']
   }
 ]
 
@@ -74,8 +74,14 @@ function readString(value: unknown): string {
 function ensureFormattedString(value: string): string {
   if (value === 'Not mentioned' || !value) return 'Not mentioned'
   
-  // If already contains bullets, return as-is
-  if (value.includes('•')) return value
+  // Normalize all bullet formats to •
+  let normalized = value
+    .replace(/^[-–•]\s*/gm, '• ')  // Replace all bullet types with •
+    .replace(/\n\n+/g, '\n')       // Remove extra blank lines
+    .trim()
+  
+  // If already contains bullets, keep as-is
+  if (normalized.includes('•')) return normalized
   
   // Otherwise format as bullet points
   return formatAsBulletPoints(value, 3)
@@ -110,18 +116,42 @@ function parseExtractionResponse(parsed: Record<string, unknown>): ExtractedData
 }
 
 const TEMPLATE_PHRASES = [
+  // Exact prompt copies that indicate the LLM just echoed the task
   'research context, problem statement',
   'theoretical framework and specific hypotheses',
   'research design, sample characteristics',
   'all scales, instruments, and measurement tools',
   'main findings, statistical results',
   'theoretical and practical contributions',
-  'study limitations acknowledged by authors'
+  'study limitations acknowledged by authors',
+  // Low-signal responses
+  'not explicitly stated',
+  'not clearly specified',
+  'not provided in the text',
+  'not mentioned in the paper',
+  'information not available',
+  'not specified in the paper',
+  'unclear from the text',
+  'not stated in the paper'
 ]
 
-function looksLikeTemplateOutput(text: string) {
+function looksLikeTemplateOutput(text: string): boolean {
+  // Don't just check if phrase exists - check if text is ESSENTIALLY just the prompt
   const lower = text.toLowerCase()
-  return TEMPLATE_PHRASES.some(phrase => lower.includes(phrase))
+  
+  // If text is too short (less than 40 chars), it's likely template or placeholder
+  if (text.length < 40) return true
+  
+  // Check for exact template matches that indicate the LLM just echoed the prompt
+  const exactTemplateMatches = TEMPLATE_PHRASES.filter(phrase => lower === phrase.toLowerCase()).length
+  if (exactTemplateMatches > 0) return true
+  
+  // If the text contains template phrases AND is very short (< 80 chars), flag it
+  if (text.length < 80 && TEMPLATE_PHRASES.some(phrase => lower.includes(phrase))) {
+    return true
+  }
+  
+  return false
 }
 
 function validateExtractedData(extracted: ExtractedData) {
@@ -140,15 +170,41 @@ function validateExtractedData(extracted: ExtractedData) {
     value && value !== 'Not mentioned' && !looksLikeTemplateOutput(value)
   ).length
   
-  // More lenient validation - require only 2 meaningful extractions instead of 3
-  // Also be more lenient with uniqueness - just require at least 2 unique values
+  // More lenient validation:
+  // - Require at least 1 meaningful extraction (was 2)
+  // - Check for at least some content even if not all fields have data
   const uniqueCount = new Set(
     values
       .filter(value => value && value !== 'Not mentioned')
       .map(value => value.toLowerCase())
   ).size
 
-  return meaningfulCount >= 2 && uniqueCount >= 2
+  // Allow extraction if:
+  // 1. We have at least 1 meaningful field (more lenient than before), OR
+  // 2. We have multiple different field values even if some are short
+  const hasMinimalContent = meaningfulCount >= 1
+  const hasMultipleFields = uniqueCount >= 2
+  
+  const isValid = hasMinimalContent || hasMultipleFields
+  
+  // Debug logging
+  if (!isValid) {
+    console.warn('Extraction validation failed:', {
+      meaningfulCount,
+      uniqueCount,
+      fields: {
+        background: extracted.background?.slice(0, 30) || 'N/A',
+        theory: extracted.theory?.slice(0, 30) || 'N/A',
+        methodology: extracted.methodology?.slice(0, 30) || 'N/A',
+        measures: extracted.measures?.slice(0, 30) || 'N/A',
+        results: extracted.results?.slice(0, 30) || 'N/A',
+        implications: extracted.implications?.slice(0, 30) || 'N/A',
+        limitations: extracted.limitations?.slice(0, 30) || 'N/A'
+      }
+    })
+  }
+  
+  return isValid
 }
 
 function normalizeWhitespace(value: string) {
@@ -241,7 +297,7 @@ function collectSectionBlocks(text: string) {
 
     if (currentHeading) {
       const bucket = sections.get(currentHeading)
-      if (bucket && bucket.join(' ').length < 2500) {
+      if (bucket && bucket.join(' ').length < 4000) {  // Increased from 2500 to 4000 to capture more section content
         bucket.push(line)
       }
     }
@@ -389,14 +445,14 @@ function buildFocusedPaperContext(text: string, context?: ExtractionContext) {
       candidate = findKeywordParagraph(text, config.keywords) || ''
     }
 
-    // If still not found, try to pick sentences by relevance
+    // If still not found, try to pick sentences by relevance - increased from 5 to 8 sentences and 1000 to 1500 chars
     if (!candidate) {
-      candidate = pickSentencesByKeywords(text, config.keywords, 5, 1000) || ''
+      candidate = pickSentencesByKeywords(text, config.keywords, 8, 1500) || ''
     }
 
     if (candidate) {
-      // Increased from 4 sentences to 6, and from 700 to 1000 chars
-      parts.push(`${config.key.toUpperCase()}: ${takeSentences(candidate, 6, 1000)}`)
+      // Increased from 4 sentences to 8, and from 700 to 1200 chars per field
+      parts.push(`${config.key.toUpperCase()}: ${takeSentences(candidate, 8, 1200)}`)
     }
   }
 
@@ -404,8 +460,8 @@ function buildFocusedPaperContext(text: string, context?: ExtractionContext) {
     parts.push(stripTrailingNoise(text).slice(0, 6000))
   }
 
-  // Increased from 6000 to 8000 for better context
-  return parts.join('\n\n').slice(0, 8000)
+  // Increased from 6000 to 10000 for better context
+  return parts.join('\n\n').slice(0, 10000)
 }
 
 function tryLooseFieldExtraction(raw: string): Record<string, unknown> | null {
@@ -454,22 +510,28 @@ function isUsableSectionParagraph(paragraph: string) {
 function formatAsBulletPoints(text: string, maxBullets: number = 3): string {
   if (!text || text === 'Not mentioned') return 'Not mentioned'
   
-  // If already formatted as bullets, verify and clean
-  if (text.includes('•')) {
-    const bullets = text.split('\n').filter(line => line.trim().startsWith('•'))
-    if (bullets.length > 0) {
-      // Remove duplicates and limit
-      const seen = new Set<string>()
-      const unique: string[] = []
-      for (const bullet of bullets) {
-        const normalized = bullet.toLowerCase()
-        if (!seen.has(normalized)) {
-          seen.add(normalized)
-          unique.push(bullet)
-        }
+  // Normalize all bullet formats for processing
+  let normalized = text
+    .replace(/^[-–•]\s*/gm, '• ')  // Standardize all bullet types to •
+    .replace(/\n\n+/g, '\n')       // Remove extra blank lines
+  
+  // If already formatted as bullets, clean and deduplicate
+  const existingBullets = normalized.split('\n').filter(line => line.trim().startsWith('•'))
+  
+  if (existingBullets.length > 0) {
+    const seen = new Set<string>()
+    const unique: string[] = []
+    
+    for (const bullet of existingBullets) {
+      const content = bullet.trim().replace(/^•\s*/, '')
+      const normalized = content.toLowerCase()
+      if (!seen.has(normalized) && content.length > 0) {
+        seen.add(normalized)
+        unique.push(`• ${content}`)
       }
-      return unique.slice(0, maxBullets).join('\n')
     }
+    
+    return unique.slice(0, maxBullets).join('\n') || 'Not mentioned'
   }
   
   // Split into sentences, filtering duplicates and noise
@@ -477,36 +539,34 @@ function formatAsBulletPoints(text: string, maxBullets: number = 3): string {
     .split(/(?<=[.!?])\s+/)
     .map(s => s.trim())
     .filter(s => {
-      // Minimum length 30 chars (increased from 25) for complete sentences
-      if (s.length < 30) return false
-      // Filter out common artifacts
-      if (/^(fig|table|ref|page|www|http|author|affiliation|keywords|note|see|figure|caption|INTERNATIONAL|CHI|CSCW|ACM)/i.test(s)) return false
+      // Minimum length 20 chars (relaxed from 30)
+      if (s.length < 20) return false
+      // Filter out common artifacts - be more selective
+      if (/^(fig|table|ref|page|www|http|copyright|permission to make|keywords|see|caption)/i.test(s)) return false
       // Filter incomplete sentences
       if (s.endsWith('...') || s.endsWith('–') || s.endsWith('-')) return false
       // Filter sentences with incomplete markers or fragments
       if (/\w+-\s*$/.test(s)) return false
-      // Filter very short opening phrases (potential truncation)
-      if (/^(For|In|To|The|This|These|Our|Their|A|An)\s+\w+\s+(is|are|was|were|will)\s+\w+\s*$/.test(s)) return false
       return true
     })
   
   if (sentences.length === 0) return 'Not mentioned'
   
-  // Additional filtering for quality
+  // Additional filtering for quality - more lenient
   const qualitySentences = sentences.filter(s => {
-    // Ensure sentence is reasonably complete
+    // Ensure sentence has reasonable content (5+ words instead of 8)
     const words = s.split(/\s+/)
-    if (words.length < 8) return false // Increased from 6 to 8 words
-    // Avoid meta/reference sentences and common template patterns
-    if (/^(in.*example|for.*instance|such as|note that|table|figure|page|research|study|paper|analysis|work|project|design|problem|based|using|method|approach|examined|investigated|explored|tested|analyzed|evaluated|conducted|performed)/i.test(s)) return false
-    // Avoid sentence fragments left by truncation
+    if (words.length < 5) return false
+    // Only filter obvious meta-text
+    if (/^(and they|however,|further|additionally)\s+/i.test(s)) return false
+    // Avoid sentence fragments
     if (/\s\w+$|\w+\s*$/.test(s) && !/[.!?]$/.test(s)) return false
     return true
   })
   
   if (qualitySentences.length === 0) return 'Not mentioned'
   
-  // Deduplicate sentences - simple exact match
+  // Deduplicate sentences
   const seenSentences = new Set<string>()
   const uniqueSentences: string[] = []
   
@@ -520,7 +580,7 @@ function formatAsBulletPoints(text: string, maxBullets: number = 3): string {
   
   if (uniqueSentences.length === 0) return 'Not mentioned'
   
-  // Format as bullet points
+  // Format as bullet points - each on its own line
   const bullets = uniqueSentences.slice(0, maxBullets)
     .map(s => `• ${s}`)
     .join('\n')
@@ -608,7 +668,7 @@ async function chatForJson(
     format: 'json',
     options: {
       temperature: 0.1,
-      max_tokens: 1400
+      max_tokens: 2000  // Increased from 1400 to give LLM more space for 7 fields
     }
   })
 
@@ -658,21 +718,53 @@ export async function extractPaperWithLocalOllama(
   model?: string,
   context?: ExtractionContext
 ): Promise<StructuredExtraction> {
-  const prompt = PromptBuilder.buildExtractionPrompt(
-    buildFocusedPaperContext(truncatePaperText(paperText), context),
-    detailLevel,
-    customFields
-  )
-  const result = await chatForJson(prompt.systemPrompt, prompt.userPrompt, model)
-  const extractedData = parseExtractionResponse(result.parsed)
+  try {
+    const prompt = PromptBuilder.buildExtractionPrompt(
+      buildFocusedPaperContext(truncatePaperText(paperText), context),
+      detailLevel,
+      customFields
+    )
+    const result = await chatForJson(prompt.systemPrompt, prompt.userPrompt, model)
+    const extractedData = parseExtractionResponse(result.parsed)
 
-  if (!validateExtractedData(extractedData)) {
-    throw new Error('Ollama returned placeholder or low-signal extraction output.')
-  }
+    if (!validateExtractedData(extractedData)) {
+      // Log detailed information about what was extracted for debugging
+      console.warn('Ollama extraction validation failed. Attempting rule-based fallback...', {
+        modelUsed: result.model,
+        extractedFieldCount: Object.values(extractedData).filter(v => v !== 'Not mentioned').length,
+        extractedFields: {
+          background: extractedData.background?.slice(0, 50),
+          theory: extractedData.theory?.slice(0, 50),
+          methodology: extractedData.methodology?.slice(0, 50),
+          measures: extractedData.measures?.slice(0, 50),
+          results: extractedData.results?.slice(0, 50),
+          implications: extractedData.implications?.slice(0, 50),
+          limitations: extractedData.limitations?.slice(0, 50)
+        }
+      })
+      
+      // Instead of throwing, fall back to rule-based extraction
+      const ruleBasedData = extractPaperWithRules(paperText)
+      
+      console.log('Rule-based extraction used as fallback for Ollama validation failure')
+      return {
+        extractedData: ruleBasedData,
+        model: `${result.model} (with rule-based fallback)`
+      }
+    }
 
-  return {
-    extractedData,
-    model: result.model
+    return {
+      extractedData,
+      model: result.model
+    }
+  } catch (error) {
+    // If extraction fails completely, try rule-based extraction
+    console.warn('Ollama extraction error, using rule-based fallback:', error instanceof Error ? error.message : String(error))
+    const fallbackData = extractPaperWithRules(paperText)
+    return {
+      extractedData: fallbackData,
+      model: 'rule-based extraction (error fallback)'
+    }
   }
 }
 

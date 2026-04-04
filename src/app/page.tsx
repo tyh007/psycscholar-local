@@ -278,6 +278,45 @@ export default function Home() {
     }
   }
 
+  const handleBatchDelete = async (paperIds: string[]) => {
+    if (paperIds.length === 0) return
+    try {
+      await Promise.all(paperIds.map(id => db.deletePaper(id)))
+      await refreshList()
+      if (selectedPaperId && paperIds.includes(String(selectedPaperId))) {
+        setSelectedPaperId(null)
+      }
+      toast.success(`Permanently deleted ${paperIds.length} paper${paperIds.length > 1 ? 's' : ''}`)
+    } catch (error) {
+      console.error(error)
+      toast.error('Could not delete papers')
+    }
+  }
+
+  const handleBatchRestore = async (paperIds: string[]) => {
+    if (paperIds.length === 0) return
+    try {
+      await Promise.all(paperIds.map(id => db.restorePaperFromTrash(id)))
+      await refreshList()
+      toast.success(`Restored ${paperIds.length} paper${paperIds.length > 1 ? 's' : ''} to paper list`)
+    } catch (error) {
+      console.error(error)
+      toast.error('Could not restore papers')
+    }
+  }
+
+  const handleClearAllTrash = async () => {
+    try {
+      const trashPapers = papers.filter(p => p.inTrash)
+      await Promise.all(trashPapers.map(p => db.deletePaper(String(p.id))))
+      await refreshList()
+      toast.success('Recycle bin cleared')
+    } catch (error) {
+      console.error(error)
+      toast.error('Could not clear recycle bin')
+    }
+  }
+
   const handlePaperUpload = async (files: File[]) => {
     if (!activeProject) {
       toast.error('Please select a project first')
@@ -531,6 +570,9 @@ export default function Home() {
         onPaperMoveToTrash={handleMoveToTrash}
         onPaperRestore={handleRestorePaper}
         onPaperPermanentDelete={handlePermanentDelete}
+        onPaperBatchDelete={handleBatchDelete}
+        onPaperBatchRestore={handleBatchRestore}
+        onPaperClearAllTrash={handleClearAllTrash}
         onRefresh={() => void refreshList()}
         aiState={aiState}
         globalDetailLevel={detailLevel === 'detailed' ? 100 : 0}
