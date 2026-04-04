@@ -510,31 +510,32 @@ function isUsableSectionParagraph(paragraph: string) {
 function formatAsBulletPoints(text: string, maxBullets: number = 3): string {
   if (!text || text === 'Not mentioned') return 'Not mentioned'
   
-  // Normalize all bullet formats for processing
-  let normalized = text
-    .replace(/^[-–•]\s*/gm, '• ')  // Standardize all bullet types to •
-    .replace(/\n\n+/g, '\n')       // Remove extra blank lines
+  // First, check if text already has line breaks (newlines) - treat each line as a bullet
+  const lines = text.split('\n').filter(line => line.trim().length > 0)
   
-  // If already formatted as bullets, clean and deduplicate
-  const existingBullets = normalized.split('\n').filter(line => line.trim().startsWith('•'))
-  
-  if (existingBullets.length > 0) {
+  // If we have multiple lines, treat them as existing content structure
+  if (lines.length > 1) {
     const seen = new Set<string>()
     const unique: string[] = []
     
-    for (const bullet of existingBullets) {
-      const content = bullet.trim().replace(/^•\s*/, '')
-      const normalized = content.toLowerCase()
-      if (!seen.has(normalized) && content.length > 0) {
+    for (const line of lines) {
+      const trimmed = line.trim()
+      // Remove existing bullet markers if present
+      const cleaned = trimmed.replace(/^[-–•]\s*/, '')
+      const normalized = cleaned.toLowerCase()
+      
+      if (!seen.has(normalized) && cleaned.length > 0) {
         seen.add(normalized)
-        unique.push(`• ${content}`)
+        unique.push(`• ${cleaned}`)
       }
     }
     
-    return unique.slice(0, maxBullets).join('\n') || 'Not mentioned'
+    if (unique.length > 0) {
+      return unique.slice(0, maxBullets).join('\n')
+    }
   }
   
-  // Split into sentences, filtering duplicates and noise
+  // If no line breaks, split into sentences and format as bullet points
   const sentences = text
     .split(/(?<=[.!?])\s+/)
     .map(s => s.trim())
