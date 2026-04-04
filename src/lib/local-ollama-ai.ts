@@ -157,18 +157,22 @@ function normalizeWhitespace(value: string) {
 
 function cleanAndNormalizeText(text: string): string {
   return text
+    // Remove journal headers/footers (e.g., "INTERNATIONAL JOURNAL OF HUMAN–COMPUTER INT")
+    .replace(/[A-Z][A-Z\s–\-]{30,}(?=\n|$)/g, '')
     // Fix hyphenated words broken across lines (e.g., "litera-ture" → "literature")
     .replace(/(\w+)-\s*\n\s*(\w+)/g, '$1$2')
     // Remove KEYWORDS and similar metadata sections
     .replace(/\bKEYWORDS\b.*?(?=\n\n|\n[A-Z]|$)/is, '')
     // Remove ABSTRACT header variations
     .replace(/\bABSTRACT\b\s*[:\-]?\s*/i, '')
-    // Remove author affiliation email lines
+    // Remove author email and institution affiliation lines
     .replace(/^.*?@.*?$\n/gm, '')
     // Remove common institution/affiliation lines
     .replace(/^.*?(?:University|Department|School|College|Institute|Laboratory).*?$\n/gm, '')
     // Fix hyphenation in middle of paragraphs
     .replace(/(\w+)-(?=\n)/g, '$1')
+    // Fix line breaks that split sentences (e.g., convert "\n" mid-sentence to space)
+    .replace(/([a-z])\n+([a-z])/g, '$1 $2')
     // Remove repeated whitespace and normalize
     .replace(/\n{3,}/g, '\n\n')
     .replace(/  +/g, ' ')
@@ -473,14 +477,16 @@ function formatAsBulletPoints(text: string, maxBullets: number = 3): string {
     .split(/(?<=[.!?])\s+/)
     .map(s => s.trim())
     .filter(s => {
-      // Minimum length 25 chars for complete sentences
-      if (s.length < 25) return false
+      // Minimum length 30 chars (increased from 25) for complete sentences
+      if (s.length < 30) return false
       // Filter out common artifacts
-      if (/^(fig|table|ref|page|www|http|author|affiliation|keywords)/i.test(s)) return false
+      if (/^(fig|table|ref|page|www|http|author|affiliation|keywords|note|see|figure|caption|INTERNATIONAL|CHI|CSCW|ACM)/i.test(s)) return false
       // Filter incomplete sentences
       if (s.endsWith('...') || s.endsWith('–') || s.endsWith('-')) return false
-      // Filter sentences with incomplete markers
+      // Filter sentences with incomplete markers or fragments
       if (/\w+-\s*$/.test(s)) return false
+      // Filter very short opening phrases (potential truncation)
+      if (/^(For|In|To|The|This|These|Our|Their|A|An)\s+\w+\s+(is|are|was|were|will)\s+\w+\s*$/.test(s)) return false
       return true
     })
   
@@ -490,9 +496,11 @@ function formatAsBulletPoints(text: string, maxBullets: number = 3): string {
   const qualitySentences = sentences.filter(s => {
     // Ensure sentence is reasonably complete
     const words = s.split(/\s+/)
-    if (words.length < 6) return false // Must have at least 6 words
-    // Avoid meta/reference sentences
-    if (/^(in.*example|for.*instance|such as|note that)/i.test(s)) return false
+    if (words.length < 8) return false // Increased from 6 to 8 words
+    // Avoid meta/reference sentences and common template patterns
+    if (/^(in.*example|for.*instance|such as|note that|table|figure|page|research|study|paper|analysis|work|project|design|problem|based|using|method|approach|examined|investigated|explored|tested|analyzed|evaluated|conducted|performed)/i.test(s)) return false
+    // Avoid sentence fragments left by truncation
+    if (/\s\w+$|\w+\s*$/.test(s) && !/[.!?]$/.test(s)) return false
     return true
   })
   
