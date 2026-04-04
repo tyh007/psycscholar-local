@@ -28,6 +28,13 @@ export interface CrossPaperInput {
   extractedData: ExtractedData
 }
 
+// Context for user-provided API key (request-scoped)
+let userProvidedApiKey: string | null = null
+
+export function setUserApiKey(apiKey: string | null): void {
+  userProvidedApiKey = apiKey
+}
+
 export class CloudAIError extends Error {
   status?: number
   retryable: boolean
@@ -41,6 +48,11 @@ export class CloudAIError extends Error {
 }
 
 function getApiKey() {
+  // First check if user provided their own API key
+  if (userProvidedApiKey) {
+    return userProvidedApiKey
+  }
+  // Otherwise use environment variable
   return process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || ''
 }
 

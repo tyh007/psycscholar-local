@@ -7,7 +7,8 @@ import {
   extractPaperWithFallback,
   getCloudAIAvailability,
   performCrossPaperAnalysisWithCloudAI,
-  reExtractFieldsWithCloudAI
+  reExtractFieldsWithCloudAI,
+  setUserApiKey
 } from '@/lib/server/cloud-ai'
 
 type AvailabilityRequest = {
@@ -19,6 +20,7 @@ type ExtractPaperRequest = {
   paperText: string
   detailLevel?: 'brief' | 'detailed'
   customFields?: CustomFieldDefinition[]
+  userApiKey?: string
 }
 
 type ExtractCustomFieldRequest = {
@@ -56,8 +58,16 @@ type AIRequest =
 
 export async function POST(request: Request) {
   try {
-    await requireRequestUser(request)
+    // Parse body first to check if userApiKey is provided
     const body = (await request.json()) as AIRequest
+    
+    // Only require authentication if it's not an extraction with user API key
+    // (User can use their own Gemini API key for extraction)
+    const isExtractWithUserKey = body.action === 'extractPaper' && 'userApiKey' in body && body.userApiKey
+    
+    if (!isExtractWithUserKey) {
+      await requireRequestUser(request)
+    }
 
     switch (body.action) {
       case 'availability': {
@@ -65,19 +75,30 @@ export async function POST(request: Request) {
       }
 
       case 'extractPaper': {
-        const result = await extractPaperWithFallback(
-          body.paperText,
-          body.detailLevel || 'brief',
-          body.customFields
-        )
+        // Set user-provided API key if available
+        const extractBody = body as ExtractPaperRequest
+        if (extractBody.userApiKey) {
+          setUserApiKey(extractBody.userApiKey)
+        }
 
-        return NextResponse.json({
-          success: true,
-          extractedData: result.extractedData,
-          method: result.method,
-          fallbackUsed: result.fallbackUsed,
-          warning: result.warning
-        })
+        try {
+          const result = await extractPaperWithFallback(
+            extractBody.paperText,
+            extractBody.detailLevel || 'brief',
+            extractBody.customFields
+          )
+
+          return NextResponse.json({
+            success: true,
+            extractedData: result.extractedData,
+            method: result.method,
+            fallbackUsed: result.fallbackUsed,
+            warning: result.warning
+          })
+        } finally {
+          // Always clear user API key after extraction
+          setUserApiKey(null)
+        }
       }
 
       case 'extractCustomField': {

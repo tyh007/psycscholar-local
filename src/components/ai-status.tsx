@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -12,8 +12,12 @@ import {
   Settings,
   Wifi,
   WifiOff,
-  Cpu
+  Cpu,
+  Cloud,
+  Server
 } from 'lucide-react'
+import { AISettingsDialog } from '@/components/ai-settings-dialog'
+import { getAIProviderConfig } from '@/lib/ai-provider-config'
 
 interface AIStatusIndicatorProps {
   isAvailable: boolean
@@ -41,6 +45,14 @@ export function AIStatusIndicator({
   className = ''
 }: AIStatusIndicatorProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false)
+  const [aiProvider, setAIProvider] = useState<'ollama' | 'gemini'>('ollama')
+
+  // Load AI provider on mount
+  useEffect(() => {
+    const config = getAIProviderConfig()
+    setAIProvider(config.provider)
+  }, [])
 
   const getStatusColor = () => {
     if (isChecking) return 'text-yellow-600'
@@ -55,6 +67,11 @@ export function AIStatusIndicator({
   }
 
   const getStatusText = () => {
+    if (isChecking) return 'Checking AI...'
+    if (aiProvider === 'gemini') {
+      if (isAvailable) return 'Gemini Ready'
+      return 'Gemini Unavailable'
+    }
     if (isChecking) return 'Checking Ollama...'
     if (isAvailable) return 'Ollama Ready'
     return 'Ollama Unavailable'
@@ -63,6 +80,16 @@ export function AIStatusIndicator({
   const getConnectionIcon = () => {
     if (isAvailable) return <Wifi className="h-3 w-3" />
     return <WifiOff className="h-3 w-3" />
+  }
+
+  const getProviderIcon = () => {
+    if (aiProvider === 'gemini') return <Cloud className="h-3 w-3" />
+    return <Server className="h-3 w-3" />
+  }
+
+  const getProviderBadge = () => {
+    if (aiProvider === 'gemini') return 'Cloud Gemini'
+    return 'Local Ollama'
   }
 
   return (
@@ -86,18 +113,17 @@ export function AIStatusIndicator({
           </div>
           
           <div className="flex items-center gap-2">
-            {isAvailable && (
-              <Badge variant="secondary" className="text-xs">
-                Local Ollama
-              </Badge>
-            )}
+            <Badge variant="secondary" className="text-xs flex items-center gap-1">
+              {getProviderIcon()}
+              {getProviderBadge()}
+            </Badge>
             <Button
               variant="ghost"
               size="sm"
               className="h-6 w-6 p-0"
               onClick={(e) => {
                 e.stopPropagation()
-                onOpenSettings?.()
+                setShowSettingsDialog(true)
               }}
             >
               <Settings className="h-3 w-3" />
@@ -178,15 +204,6 @@ export function AIStatusIndicator({
                   Retry Connection
                 </Button>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onOpenSettings}
-                className="flex-1"
-              >
-                <Settings className="h-3 w-3 mr-1" />
-                AI Settings
-              </Button>
             </div>
 
             {/* Help Text */}
@@ -194,15 +211,37 @@ export function AIStatusIndicator({
                 <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
                 <div className="font-medium mb-1">Troubleshooting</div>
                 <ul className="space-y-1">
-                  <li>• Install and launch Ollama on this computer</li>
-                  <li>• Pull a model such as <code className="bg-background px-1 rounded">ollama pull qwen2.5:3b</code></li>
-                  <li>• For the hosted app, start Ollama with <code className="bg-background px-1 rounded">OLLAMA_ORIGINS=https://psycscholar-local.vercel.app ollama serve</code></li>
+                  {aiProvider === 'ollama' && (
+                    <>
+                      <li>• Install and launch Ollama on this computer</li>
+                      <li>• Pull a model such as <code className="bg-background px-1 rounded">ollama pull qwen2.5:3b</code></li>
+                      <li>• For the hosted app, start Ollama with <code className="bg-background px-1 rounded">OLLAMA_ORIGINS=https://psycscholar-local.vercel.app ollama serve</code></li>
+                    </>
+                  )}
+                  {aiProvider === 'gemini' && (
+                    <>
+                      <li>• Get a free API key from <a href="https://ai.google.dev/tutorials/setup" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google AI Studio</a></li>
+                      <li>• Click the settings button to configure your API key</li>
+                      <li>• Ensure your API key has the Generative Language API enabled</li>
+                    </>
+                  )}
                 </ul>
               </div>
             )}
           </div>
         </Card>
       )}
+
+      {/* AI Settings Dialog */}
+      <AISettingsDialog 
+        open={showSettingsDialog}
+        onOpenChange={setShowSettingsDialog}
+        onSettingsSaved={() => {
+          const config = getAIProviderConfig()
+          setAIProvider(config.provider)
+          onOpenSettings?.()
+        }}
+      />
     </div>
   )
 }
@@ -218,7 +257,7 @@ export function AIStatusBadge({ isAvailable, isChecking, className = '' }: AISta
     return (
       <Badge variant="secondary" className={`gap-1 ${className}`}>
         <Loader2 className="h-3 w-3 animate-spin" />
-        Checking Ollama
+        Checking AI
       </Badge>
     )
   }
