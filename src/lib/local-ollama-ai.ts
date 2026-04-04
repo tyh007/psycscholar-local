@@ -473,8 +473,8 @@ function tryLooseFieldExtraction(raw: string): Record<string, unknown> | null {
     if (match?.[1]) {
       result[config.key] = match[1]
         .replace(/\\"/g, '"')
-        .replace(/\\n/g, ' ')
-        .replace(/\s+/g, ' ')
+        .replace(/\\n/g, '\n')  // Preserve newlines instead of replacing with space
+        .replace(/  +/g, ' ')   // Only remove multiple spaces, not newlines
         .trim()
     }
   }
