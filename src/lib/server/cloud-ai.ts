@@ -48,6 +48,12 @@ function getModelName() {
   return process.env.GEMINI_MODEL || process.env.NEXT_PUBLIC_GEMINI_MODEL || DEFAULT_MODEL
 }
 
+// Logging utility for debugging extraction process
+function logExtraction(stage: string, details: Record<string, unknown>) {
+  const timestamp = new Date().toISOString()
+  console.log(`[EXTRACTION LOG ${timestamp}] ${stage}:`, JSON.stringify(details, null, 2))
+}
+
 function normalizeJsonResponse(text: string) {
   return PromptBuilder.sanitizeResponse(text)
 }
@@ -498,11 +504,24 @@ export async function extractPaperWithCloudAI(
   detailLevel: 'brief' | 'detailed',
   customFields?: CustomFieldDefinition[]
 ) {
+  logExtraction('CLOUD_AI_START', {
+    paperTextLength: paperText.length,
+    detailLevel,
+    hasCustomFields: !!customFields,
+    model: getModelName()
+  })
+
   const prompt = PromptBuilder.buildExtractionPrompt(
     slicePaperText(paperText),
     detailLevel,
     customFields
   )
+
+  logExtraction('TEXT_SLICED', {
+    originalLength: paperText.length,
+    slicedLength: slicePaperText(paperText).length,
+    maxChars: 25000
+  })
 
   const raw = await callGemini({
     systemPrompt: prompt.systemPrompt,
@@ -512,8 +531,20 @@ export async function extractPaperWithCloudAI(
     maxOutputTokens: detailLevel === 'detailed' ? 3200 : 2200
   })
 
+  logExtraction('GEMINI_RESPONSE_RECEIVED', {
+    responseLength: raw.length,
+    model: getModelName()
+  })
+
   const parsed = JSON.parse(normalizeJsonResponse(raw)) as Record<string, unknown>
-  return mapParsedExtraction(parsed, customFields)
+  const result = mapParsedExtraction(parsed, customFields)
+
+  logExtraction('CLOUD_AI_COMPLETE', {
+    extractedFields: Object.keys(result),
+    method: 'Google Gemini'
+  })
+
+  return result
 }
 
 export async function extractPaperWithFallback(
@@ -521,15 +552,39 @@ export async function extractPaperWithFallback(
   detailLevel: 'brief' | 'detailed',
   customFields?: CustomFieldDefinition[]
 ) {
+  logExtraction('EXTRACTION_START', {
+    paperTextLength: paperText.length,
+    detailLevel,
+    timestamp: new Date().toISOString()
+  })
+
   try {
+    logExtraction('TRYING_CLOUD_AI', { method: 'Google Gemini' })
     const extractedData = await extractPaperWithCloudAI(paperText, detailLevel, customFields)
+    
+    logExtraction('EXTRACTION_SUCCESS', {
+      method: 'Google Gemini',
+      fieldsExtracted: Object.keys(extractedData).length
+    })
+
     return {
       extractedData,
       method: 'Google Gemini',
       fallbackUsed: false as const
     }
   } catch (error) {
+    logExtraction('CLOUD_AI_FAILED', {
+      error: error instanceof Error ? error.message : String(error),
+      attempting: 'rule-based fallback'
+    })
+
     const extractedData = extractWithRules(paperText)
+
+    logExtraction('FALLBACK_COMPLETE', {
+      method: 'Rule-based fallback',
+      fieldsExtracted: Object.keys(extractedData).length
+    })
+
     return {
       extractedData,
       method: 'Rule-based fallback',

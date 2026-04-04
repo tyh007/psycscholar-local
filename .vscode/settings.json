@@ -1,0 +1,11 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^cd /Users/yht/Library/CloudStorage/OneDrive-Personal/School\\\\ Works/BSc\\\\ Y1\\\\ T1\\\\ \\\\&\\\\ T2/Personal\\\\ Projects/Literature/psycscholar-local && node -e \"\nconst fs = require\\('fs'\\);\nconst path = require\\('path'\\);\n\n// 简单的测试 - 检查PDF的原始大小\nconst pdfPath = '/Users/yht/Library/CloudStorage/OneDrive-Personal/School\\\\\\\\ Works/BSc\\\\\\\\ Y1\\\\\\\\ T1\\\\\\\\ \\\\\\\\&\\\\\\\\ T2/HCI\\\\\\\\ Project/Literature\\\\\\\\ Review/润琦1/Okamura\\\\\\\\ \\\\\\\\&\\\\\\\\ Yamada,\\\\\\\\ 2020\\.pdf';\nconst stats = fs\\.statSync\\(pdfPath\\);\nconsole\\.log\\('PDF file size:', stats\\.size, 'bytes'\\);\n\" 2>&1$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "git add": true,
+        "git commit": true,
+        "git push": true
+    }
+}
