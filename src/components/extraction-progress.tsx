@@ -1,40 +1,28 @@
-import { useState } from 'react'
-import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { 
-  Loader2, 
-  CheckCircle, 
-  XCircle, 
+import type { ExtractionJob } from '@/hooks/use-ai-extraction'
+import type { ExtractedData } from '@/lib/database'
+import {
   AlertCircle,
-  FileText,
   Brain,
+  CheckCircle,
   Clock,
-  Trash2,
   Eye,
-  RotateCcw
+  Loader2,
+  RotateCcw,
+  Trash2,
+  XCircle
 } from 'lucide-react'
-
-interface ExtractionJob {
-  id: string
-  paperId: string
-  fileName: string
-  status: 'pending' | 'extracting' | 'completed' | 'error'
-  progress: number
-  currentStep: string
-  result?: any
-  error?: string
-  startTime: number
-  endTime?: number
-}
+import { useEffect, useState } from 'react'
 
 interface ExtractionProgressProps {
   jobs: ExtractionJob[]
   onClearCompleted?: () => void
   onClearAll?: () => void
   onRetryJob?: (jobId: string) => void
-  onViewResult?: (jobId: string, result: any) => void
+  onViewResult?: (jobId: string, result: ExtractedData | string) => void
   className?: string
 }
 
@@ -47,6 +35,14 @@ export function ExtractionProgress({
   className = ''
 }: ExtractionProgressProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [now, setNow] = useState<number | null>(null)
+
+  const hasActiveJobs = jobs.some(job => job.status === 'pending' || job.status === 'extracting')
+  useEffect(() => {
+    if (!hasActiveJobs) return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [hasActiveJobs])
   
   const activeJobs = jobs.filter(job => job.status === 'extracting' || job.status === 'pending')
   const completedJobs = jobs.filter(job => job.status === 'completed')
@@ -73,7 +69,7 @@ export function ExtractionProgress({
   }
 
   const formatDuration = (startTime: number, endTime?: number) => {
-    const duration = (endTime || Date.now()) - startTime
+    const duration = Math.max(0, (endTime ?? now ?? startTime) - startTime)
     const seconds = Math.floor(duration / 1000)
     
     if (seconds < 60) return `${seconds}s`
@@ -191,7 +187,7 @@ export function ExtractionProgress({
                         variant="ghost"
                         size="sm"
                         className="h-6 w-6 p-0"
-                        onClick={() => onViewResult(job.id, job.result)}
+                        onClick={() => { if (job.result !== undefined) onViewResult(job.id, job.result) }}
                         title="View results"
                       >
                         <Eye className="h-3 w-3" />

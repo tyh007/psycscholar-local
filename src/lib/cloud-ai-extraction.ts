@@ -1,4 +1,4 @@
-import { CloudAIServiceFactory, type CloudAIService, CLOUD_AI_CONFIG } from './cloud-ai-client'
+import { CLOUD_AI_CONFIG, CloudAIServiceFactory, type CloudAIService } from './cloud-ai-client'
 
 // 定义 ExtractedData 接口
 export interface ExtractedData {
@@ -33,8 +33,7 @@ export class CloudAIExtractionService {
   }
 
   async extractFromPaper(
-    paperText: string,
-    options: CloudExtractionOptions = { service: 'gemini' }
+    paperText: string
   ): Promise<CloudExtractionResult> {
     const startTime = Date.now()
     

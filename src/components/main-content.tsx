@@ -1,33 +1,33 @@
 "use client"
 
-import { useEffect, useRef, useState } from 'react'
-import { Card } from '@/components/ui/card'
+import { AIStatusIndicator } from '@/components/ai-status'
+import { CustomFieldManager } from '@/components/custom-field-manager'
+import { ExportDialog } from '@/components/export-dialog'
+import { ExtractionProgress } from '@/components/extraction-progress'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
-import { AIStatusIndicator } from '@/components/ai-status'
-import { ExtractionProgress } from '@/components/extraction-progress'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Checkbox } from '@/components/ui/checkbox'
-import { ExportDialog } from '@/components/export-dialog'
-import { CustomFieldManager } from '@/components/custom-field-manager'
-import { 
-  Upload, 
-  Search, 
-  Filter, 
-  Plus, 
+import { type Paper } from '@/lib/database'
+import { type CustomFieldDefinition } from '@/lib/prompt-builder'
+import {
+  ArchiveRestore,
+  BarChart3,
+  Brain,
   Download,
   Eye,
   FileText,
-  Brain,
-  BarChart3,
-  Trash2,
+  Filter,
+  Plus,
   RefreshCw,
-  ArchiveRestore
+  Search,
+  Trash2,
+  Upload
 } from 'lucide-react'
-import { type Paper } from '@/lib/database'
-import { type CustomFieldDefinition } from '@/lib/prompt-builder'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
 type ColumnKey =
   | 'title'
@@ -186,6 +186,28 @@ function extractSurname(name: string): string {
   return compact
 }
 
+function subscribeTableWidths(onChange: () => void) {
+  window.addEventListener('storage', onChange)
+  return () => window.removeEventListener('storage', onChange)
+}
+
+function parseColumnWidths(raw: string | null): Record<ColumnKey, number> {
+  const widths = { ...DEFAULT_COLUMN_WIDTHS }
+  if (!raw) return widths
+  try {
+    const parsed = JSON.parse(raw) as Partial<Record<ColumnKey, number>>
+    for (const key of Object.keys(widths) as ColumnKey[]) {
+      const value = parsed?.[key]
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        widths[key] = Math.max(MIN_COLUMN_WIDTHS[key], value)
+      }
+    }
+  } catch {
+    // Ignore stale/invalid browser settings and retain the defaults.
+  }
+  return widths
+}
+
 interface MainContentProps {
   activeProject: string | null
   papers: Paper[]
@@ -210,7 +232,7 @@ interface MainContentProps {
   }
   globalDetailLevel?: number
   setGlobalDetailLevel?: (level: number) => void
-  extractionJobs?: any[]
+  extractionJobs?: import('@/hooks/use-ai-extraction').ExtractionJob[]
   activeExtractionJobs?: number
   customFieldDefinitions?: CustomFieldDefinition[]
   onAddCustomField?: (field: CustomFieldDefinition) => void | Promise<void>
@@ -234,7 +256,6 @@ export function MainContent({
   onPaperPermanentDelete,
   onPaperBatchDelete,
   onPaperBatchRestore,
-  onPaperClearAllTrash,
   onRefresh,
   aiState,
   globalDetailLevel = 50,
@@ -270,7 +291,18 @@ export function MainContent({
   const [permanentDialogOpen, setPermanentDialogOpen] = useState(false)
   const [permanentTargetId, setPermanentTargetId] = useState<string | null>(null)
   const [confirmPermanentDelete, setConfirmPermanentDelete] = useState(false)
-  const [columnWidths, setColumnWidths] = useState<Record<ColumnKey, number>>(DEFAULT_COLUMN_WIDTHS)
+  const storedWidths = useSyncExternalStore(
+    subscribeTableWidths,
+    () => window.localStorage.getItem('psycscholar-table-widths'),
+    () => null
+  )
+  const [columnWidthOverride, setColumnWidths] = useState<Record<ColumnKey, number> | null>(null)
+  const columnWidths = columnWidthOverride ?? parseColumnWidths(storedWidths)
+  const [selectionContext, setSelectionContext] = useState({ activeProject, isTrashView })
+  if (selectionContext.activeProject !== activeProject || selectionContext.isTrashView !== isTrashView) {
+    setSelectionContext({ activeProject, isTrashView })
+    setSelectedPaperIds(new Set())
+  }
   const [detailLevel, setDetailLevel] = useState<number[]>([globalDetailLevel])
   const resizeStateRef = useRef<{
     key: ColumnKey
@@ -279,24 +311,10 @@ export function MainContent({
   } | null>(null)
 
   useEffect(() => {
-    const savedWidths = window.localStorage.getItem('psycscholar-table-widths')
-    if (!savedWidths) return
-
-    try {
-      const parsed = JSON.parse(savedWidths) as Partial<Record<ColumnKey, number>>
-      setColumnWidths(prev => ({ ...prev, ...parsed }))
-    } catch (error) {
-      console.warn('Failed to restore table widths:', error)
+    if (columnWidthOverride) {
+      window.localStorage.setItem('psycscholar-table-widths', JSON.stringify(columnWidthOverride))
     }
-  }, [])
-
-  useEffect(() => {
-    window.localStorage.setItem('psycscholar-table-widths', JSON.stringify(columnWidths))
-  }, [columnWidths])
-
-  useEffect(() => {
-    setDetailLevel([globalDetailLevel])
-  }, [globalDetailLevel])
+  }, [columnWidthOverride])
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
@@ -310,15 +328,14 @@ export function MainContent({
       )
 
       setColumnWidths(prev => ({
-        ...prev,
+        ...(prev ?? parseColumnWidths(window.localStorage.getItem('psycscholar-table-widths'))),
         [resizeState.key]: nextWidth
       }))
     }
 
     const handleMouseUp = () => {
       resizeStateRef.current = null
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
+      document.documentElement.classList.remove('psycscholar-resizing')
     }
 
     window.addEventListener('mousemove', handleMouseMove)
@@ -327,6 +344,7 @@ export function MainContent({
     return () => {
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
+      document.documentElement.classList.remove('psycscholar-resizing')
     }
   }, [])
 
@@ -337,8 +355,7 @@ export function MainContent({
       startX: event.clientX,
       startWidth: columnWidths[key]
     }
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
+    document.documentElement.classList.add('psycscholar-resizing')
   }
 
   const handleTogglePaperSelection = (paperId: string | number | undefined) => {
@@ -379,12 +396,6 @@ export function MainContent({
   const handleBatchRestore = () => {
     if (selectedPaperIds.size === 0 || !isTrashView) return
     onPaperBatchRestore?.(Array.from(selectedPaperIds))
-    setSelectedPaperIds(new Set())
-  }
-
-  const handleClearAllTrash = () => {
-    const allIds = filteredPapers.map(p => String(p.id))
-    onPaperClearAllTrash?.()
     setSelectedPaperIds(new Set())
   }
 

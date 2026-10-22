@@ -189,7 +189,7 @@ export function Sidebar({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation()
-                      project.id && onProjectDelete(project.id)
+                      if (project.id) onProjectDelete(project.id)
                     }}
                     className="h-6 w-6 p-0 opacity-0 transition-opacity group-hover:opacity-100"
                   >

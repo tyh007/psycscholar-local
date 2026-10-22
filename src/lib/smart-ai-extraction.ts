@@ -24,7 +24,6 @@ export class SmartAIExtractionService {
     const paragraphs = this.splitIntoParagraphs(text)
     
     // 提取摘要
-    const abstract = this.extractAbstract(paragraphs)
     
     // 为每个部分找到最相关的段落 - 确保每个部分使用不同的段落
     const usedParagraphs = new Set<number>()
@@ -145,17 +144,17 @@ export class SmartAIExtractionService {
     const fullText = paragraphs.join(' ')
 
     for (const [key, value] of Object.entries(extracted)) {
-      if (value === 'Not extracted' || value.length < 20) {
+      if (key !== 'customFields' && (value === 'Not extracted' || value.length < 20)) {
         // 尝试从摘要中提取
         const sectionKeywords = this.sections.find(s => s.name === key)?.keywords || []
         const relevantSentences = this.extractSentences(abstract)
           .filter(sent => sectionKeywords.some(kw => sent.toLowerCase().includes(kw.toLowerCase())))
         
         if (relevantSentences.length > 0) {
-          (extracted as any)[key] = relevantSentences.slice(0, 2).join(' ').substring(0, 200)
+          extracted[key as keyof Omit<ExtractedData, 'customFields'>] = relevantSentences.slice(0, 2).join(' ').substring(0, 200)
         } else {
           // 使用全文前几句作为后备
-          (extracted as any)[key] = this.extractSentences(fullText).slice(0, 2).join(' ').substring(0, 200)
+          extracted[key as keyof Omit<ExtractedData, 'customFields'>] = this.extractSentences(fullText).slice(0, 2).join(' ').substring(0, 200)
         }
       }
     }

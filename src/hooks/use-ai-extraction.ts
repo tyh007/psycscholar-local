@@ -1,3 +1,4 @@
+import type { ExtractedData } from '@/lib/database'
 import { useState, useCallback, useEffect } from 'react'
 import { aiExtractionService, type ExtractionOptions, type ExtractionProgress } from '@/lib/ai-extraction'
 import { PSYCHOLOGY_CUSTOM_FIELDS, type CustomFieldDefinition } from '@/lib/prompt-builder'
@@ -19,7 +20,7 @@ export interface ExtractionJob {
   status: 'pending' | 'extracting' | 'completed' | 'error'
   progress: number
   currentStep: string
-  result?: any
+  result?: ExtractedData | string
   error?: string
   startTime: number
   endTime?: number
@@ -126,7 +127,7 @@ export function useAIExtraction() {
             job.id === jobId 
               ? { 
                   ...job, 
-                  status: progress.status as any,
+                  status: progress.status,
                   progress: progress.progress,
                   currentStep: progress.currentStep,
                   error: progress.error
@@ -204,7 +205,7 @@ export function useAIExtraction() {
             job.id === jobId 
               ? { 
                   ...job, 
-                  status: progress.status as any,
+                  status: progress.status,
                   progress: progress.progress,
                   currentStep: progress.currentStep,
                   error: progress.error
@@ -256,7 +257,7 @@ export function useAIExtraction() {
     paperId: string,
     fileName: string,
     paperText: string,
-    existingData: any,
+    existingData: ExtractedData,
     fieldsToUpdate: string[]
   ) => {
     const jobId = `reextract-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -284,7 +285,7 @@ export function useAIExtraction() {
             job.id === jobId 
               ? { 
                   ...job, 
-                  status: progress.status as any,
+                  status: progress.status,
                   progress: progress.progress,
                   currentStep: progress.currentStep,
                   error: progress.error

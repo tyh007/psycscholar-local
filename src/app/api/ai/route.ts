@@ -1,3 +1,4 @@
+import { withUserApiKey } from '@/lib/server/request-api-key'
 import { NextResponse } from 'next/server'
 import { type ExtractedData } from '@/lib/database'
 import { type CustomFieldDefinition } from '@/lib/prompt-builder'
@@ -7,8 +8,7 @@ import {
   extractPaperWithFallback,
   getCloudAIAvailability,
   performCrossPaperAnalysisWithCloudAI,
-  reExtractFieldsWithCloudAI,
-  setUserApiKey
+  reExtractFieldsWithCloudAI
 } from '@/lib/server/cloud-ai'
 
 type AvailabilityRequest = {
@@ -75,19 +75,12 @@ export async function POST(request: Request) {
       }
 
       case 'extractPaper': {
-        // Set user-provided API key if available
-        const extractBody = body as ExtractPaperRequest
-        if (extractBody.userApiKey) {
-          setUserApiKey(extractBody.userApiKey)
-        }
-
-        try {
+        return await withUserApiKey(body.userApiKey, async () => {
           const result = await extractPaperWithFallback(
-            extractBody.paperText,
-            extractBody.detailLevel || 'brief',
-            extractBody.customFields
+            body.paperText,
+            body.detailLevel || 'brief',
+            body.customFields
           )
-
           return NextResponse.json({
             success: true,
             extractedData: result.extractedData,
@@ -95,10 +88,7 @@ export async function POST(request: Request) {
             fallbackUsed: result.fallbackUsed,
             warning: result.warning
           })
-        } finally {
-          // Always clear user API key after extraction
-          setUserApiKey(null)
-        }
+        })
       }
 
       case 'extractCustomField': {

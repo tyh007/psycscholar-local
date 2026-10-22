@@ -1,23 +1,32 @@
-import { useState, useEffect } from 'react'
+import { AISettingsDialog } from '@/components/ai-settings-dialog'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
-import { 
-  Brain, 
-  CheckCircle, 
-  XCircle, 
-  AlertCircle, 
-  Loader2, 
+import { getAIProviderConfig } from '@/lib/ai-provider-config'
+import {
+  AlertCircle,
+  Brain,
+  CheckCircle,
+  Cloud,
+  Cpu,
+  Loader2,
+  Server,
   Settings,
   Wifi,
   WifiOff,
-  Cpu,
-  Cloud,
-  Server
+  XCircle
 } from 'lucide-react'
-import { AISettingsDialog } from '@/components/ai-settings-dialog'
-import { getAIProviderConfig } from '@/lib/ai-provider-config'
+import { useState, useSyncExternalStore } from 'react'
+
+function subscribeAIProvider(onChange: () => void) {
+  window.addEventListener('storage', onChange)
+  window.addEventListener('psycscholar-ai-provider-change', onChange)
+  return () => {
+    window.removeEventListener('storage', onChange)
+    window.removeEventListener('psycscholar-ai-provider-change', onChange)
+  }
+}
 
 interface AIStatusIndicatorProps {
   isAvailable: boolean
@@ -46,13 +55,11 @@ export function AIStatusIndicator({
 }: AIStatusIndicatorProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [showSettingsDialog, setShowSettingsDialog] = useState(false)
-  const [aiProvider, setAIProvider] = useState<'ollama' | 'gemini'>('ollama')
-
-  // Load AI provider on mount
-  useEffect(() => {
-    const config = getAIProviderConfig()
-    setAIProvider(config.provider)
-  }, [])
+  const aiProvider = useSyncExternalStore(
+    subscribeAIProvider,
+    () => getAIProviderConfig().provider,
+    () => 'ollama' as const
+  )
 
   const getStatusColor = () => {
     if (isChecking) return 'text-yellow-600'
@@ -237,8 +244,6 @@ export function AIStatusIndicator({
         open={showSettingsDialog}
         onOpenChange={setShowSettingsDialog}
         onSettingsSaved={() => {
-          const config = getAIProviderConfig()
-          setAIProvider(config.provider)
           onOpenSettings?.()
         }}
       />

@@ -75,7 +75,7 @@ function ensureFormattedString(value: string): string {
   if (value === 'Not mentioned' || !value) return 'Not mentioned'
   
   // First, handle any escaped newline sequences that might be in the string
-  let normalized = value
+  const normalized = value
     .replace(/\\n/g, '\n')         // Convert escaped \\n to actual newlines
     .replace(/\\r/g, '')           // Remove escaped carriage returns
     .replace(/^[-–•]\s*/gm, '• ')  // Replace all bullet types with •
@@ -690,7 +690,7 @@ async function chatForJson(
 
   try {
     parsed = JSON.parse(cleaned) as Record<string, unknown>
-  } catch (error) {
+  } catch {
     const loose = tryLooseFieldExtraction(cleaned)
     if (loose) {
       parsed = loose
