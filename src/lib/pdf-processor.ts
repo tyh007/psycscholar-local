@@ -1,35 +1,12 @@
-// Dynamic import to avoid server-side rendering issues
-let pdfjsLib: any = null
+import type { PDFDocumentProxy } from 'pdfjs-dist'
 
-// Initialize PDF.js only in browser environment
+// Import PDF.js in the browser; its ESM module is the supported package API.
+let pdfjsLib: typeof import('pdfjs-dist') | null = null
+
 async function initializePDFJS() {
   if (typeof window !== 'undefined' && !pdfjsLib) {
-    try {
-      console.log('Attempting to import pdfjs-dist...')
-      const pdfjs = await import('pdfjs-dist')
-      const pdfjsModule = pdfjs as any
-      console.log('pdfjs-dist imported:', pdfjs)
-      
-      // Try different ways to access the PDF.js library
-      pdfjsLib = pdfjsModule.default || pdfjsModule.pdfjsLib || pdfjsModule
-      
-      console.log('pdfjsLib after assignment:', pdfjsLib)
-      
-      if (!pdfjsLib) {
-        throw new Error('PDF.js library not found in import')
-      }
-      
-      // Configure worker
-      if (pdfjsLib.GlobalWorkerOptions) {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
-        console.log('PDF.js worker configured')
-      } else {
-        console.warn('PDF.js GlobalWorkerOptions not found')
-      }
-    } catch (error) {
-      console.error('Failed to initialize PDF.js:', error)
-      throw new Error('PDF.js initialization failed')
-    }
+    pdfjsLib = await import('pdfjs-dist')
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
   }
   return pdfjsLib
 }
@@ -123,18 +100,19 @@ export class PDFProcessor {
     }
   }
 
-  private static async extractMetadata(pdf: any): Promise<PDFMetadata> {
+  private static async extractMetadata(pdf: PDFDocumentProxy): Promise<PDFMetadata> {
     try {
       const info = await pdf.getMetadata()
+      const documentInfo = info.info as Record<string, string | undefined>
       const metadata: PDFMetadata = {
-        title: info.info?.Title,
-        author: info.info?.Author,
-        subject: info.info?.Subject,
-        keywords: info.info?.Keywords,
-        creator: info.info?.Creator,
-        producer: info.info?.Producer,
-        creationDate: info.info?.CreationDate ? new Date(info.info.CreationDate) : undefined,
-        modificationDate: info.info?.ModDate ? new Date(info.info.ModDate) : undefined
+        title: documentInfo.Title,
+        author: documentInfo.Author,
+        subject: documentInfo.Subject,
+        keywords: documentInfo.Keywords,
+        creator: documentInfo.Creator,
+        producer: documentInfo.Producer,
+        creationDate: documentInfo.CreationDate ? new Date(documentInfo.CreationDate) : undefined,
+        modificationDate: documentInfo.ModDate ? new Date(documentInfo.ModDate) : undefined
       }
       return metadata
     } catch (error) {
@@ -143,7 +121,7 @@ export class PDFProcessor {
     }
   }
 
-  private static async extractAllPages(pdf: any): Promise<string[]> {
+  private static async extractAllPages(pdf: PDFDocumentProxy): Promise<string[]> {
     const pages: string[] = []
     const numPages = pdf.numPages
 

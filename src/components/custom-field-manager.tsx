@@ -1,26 +1,24 @@
-import { useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Card } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { 
-  Plus, 
-  Edit2, 
-  Trash2, 
-  Save, 
-  X, 
-  Lightbulb,
+import { Textarea } from '@/components/ui/textarea'
+import { type CustomFieldDefinition } from '@/lib/prompt-builder'
+import {
   BookOpen,
+  Edit2,
+  Lightbulb,
+  Plus,
+  Save,
+  Settings,
   Target,
-  Zap,
-  Settings
+  Trash2,
+  X,
+  Zap
 } from 'lucide-react'
-import { PSYCHOLOGY_CUSTOM_FIELDS, type CustomFieldDefinition } from '@/lib/prompt-builder'
+import { useState } from 'react'
 
 interface CustomFieldManagerProps {
   isOpen: boolean
@@ -121,7 +119,7 @@ export function CustomFieldManager({
     }
   ]
 
-  const useTemplate = (template: typeof predefinedTemplates[0]) => {
+  const applyTemplate = (template: typeof predefinedTemplates[0]) => {
     setFormData({
       name: template.name,
       description: template.description,
@@ -282,7 +280,7 @@ export function CustomFieldManager({
                             key={index}
                             variant="outline"
                             size="sm"
-                            onClick={() => useTemplate(template)}
+                            onClick={() => applyTemplate(template)}
                             className="text-xs h-auto py-2 px-2 text-left"
                           >
                             <div className="font-medium">{template.name}</div>

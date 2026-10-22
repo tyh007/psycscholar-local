@@ -1,23 +1,21 @@
-import { useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { 
-  RefreshCw, 
-  Brain, 
-  Settings, 
-  CheckCircle,
-  AlertCircle,
-  Loader2,
-  FileText,
-  Zap
-} from 'lucide-react'
-import { type Paper, type ExtractedData } from '@/lib/database'
+import { type ExtractedData, type Paper } from '@/lib/database'
 import { type CustomFieldDefinition } from '@/lib/prompt-builder'
+import {
+  AlertCircle,
+  Brain,
+  CheckCircle,
+  FileText,
+  Loader2,
+  RefreshCw
+} from 'lucide-react'
+import { useState } from 'react'
 
 interface ReExtractionDialogProps {
   isOpen: boolean
@@ -116,8 +114,8 @@ export function ReExtractionDialog({
   if (!paper) return null
 
   const isFieldAlreadyExtracted = (fieldId: string) => {
-    return paper.extractedData && (paper.extractedData as any)[fieldId] && 
-           (paper.extractedData as any)[fieldId] !== 'Not extracted'
+    const value = paper.extractedData?.[fieldId as keyof Omit<ExtractedData, 'customFields'>]
+    return Boolean(value && value !== 'Not extracted')
   }
 
   return (
@@ -333,7 +331,7 @@ export function ReExtractionDialog({
             <div className="font-medium mb-1">Tips:</div>
             <ul className="space-y-1">
               <li>• Select only the fields you want to update to save processing time</li>
-              <li>• Use "Detailed" mode for comprehensive analysis</li>
+              <li>• Use &quot;Detailed&quot; mode for comprehensive analysis</li>
               <li>• Force re-extraction will ignore all previous data</li>
               <li>• Custom fields will be processed in addition to core fields</li>
             </ul>

@@ -153,3 +153,8 @@
     @apply font-mono text-sm bg-muted/30 p-3 rounded-md border-l-4 border-primary/30;
   }
 }
+/* Keep drag feedback scoped and remove it when the table unmounts. */
+html.psycscholar-resizing, html.psycscholar-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}

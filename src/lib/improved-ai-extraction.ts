@@ -11,13 +11,13 @@ export class ImprovedAIExtractionService {
     
     // 提取各个部分
     const extracted: ExtractedData = {
-      background: this.extractBackground(paragraphs, cleanText),
-      theory: this.extractTheory(paragraphs, cleanText),
-      methodology: this.extractMethodology(paragraphs, cleanText),
-      measures: this.extractMeasures(paragraphs, cleanText),
-      results: this.extractResults(paragraphs, cleanText),
-      implications: this.extractImplications(paragraphs, cleanText),
-      limitations: this.extractLimitations(paragraphs, cleanText)
+      background: this.extractBackground(paragraphs),
+      theory: this.extractTheory(paragraphs),
+      methodology: this.extractMethodology(paragraphs),
+      measures: this.extractMeasures(paragraphs),
+      results: this.extractResults(paragraphs),
+      implications: this.extractImplications(paragraphs),
+      limitations: this.extractLimitations(paragraphs)
     }
 
     // 确保没有空值
@@ -40,7 +40,7 @@ export class ImprovedAIExtractionService {
       .filter(p => p.length > 30 && p.length < 1500)
   }
 
-  private extractBackground(paragraphs: string[], fullText: string): string {
+  private extractBackground(paragraphs: string[]): string {
     // Background 通常在论文开头
     // 1. 找标题为 Introduction 或 Background 的部分
     for (let i = 0; i < Math.min(5, paragraphs.length); i++) {
@@ -58,7 +58,7 @@ export class ImprovedAIExtractionService {
     return paragraphs[0]?.substring(0, 300) || 'Not extracted'
   }
 
-  private extractTheory(paragraphs: string[], fullText: string): string {
+  private extractTheory(paragraphs: string[]): string {
     // Theory 通常在 Introduction 之后
     const keywords = ['theory', 'theoretical', 'framework', 'model', 'hypothesis', 'conceptual']
     
@@ -73,7 +73,7 @@ export class ImprovedAIExtractionService {
     return this.findParagraphWithKeywords(paragraphs, keywords) || 'Not extracted'
   }
 
-  private extractMethodology(paragraphs: string[], fullText: string): string {
+  private extractMethodology(paragraphs: string[]): string {
     // Methodology 通常在中间位置
     const keywords = ['method', 'methodology', 'participants', 'procedure', 'design', 'sample']
     const startIdx = Math.floor(paragraphs.length * 0.2)
@@ -89,7 +89,7 @@ export class ImprovedAIExtractionService {
     return this.findParagraphWithKeywords(paragraphs, keywords) || 'Not extracted'
   }
 
-  private extractMeasures(paragraphs: string[], fullText: string): string {
+  private extractMeasures(paragraphs: string[]): string {
     // Measures 通常在 Methodology 附近
     const keywords = ['measure', 'scale', 'instrument', 'questionnaire', 'survey', 'assessment']
     
@@ -103,7 +103,7 @@ export class ImprovedAIExtractionService {
     return 'Not extracted'
   }
 
-  private extractResults(paragraphs: string[], fullText: string): string {
+  private extractResults(paragraphs: string[]): string {
     // Results 通常在论文后半部分
     const keywords = ['results', 'findings', 'analysis', 'significant', 'p <', 'correlation', 'regression']
     const startIdx = Math.floor(paragraphs.length * 0.4)
@@ -118,7 +118,7 @@ export class ImprovedAIExtractionService {
     return this.findParagraphWithKeywords(paragraphs, keywords) || 'Not extracted'
   }
 
-  private extractImplications(paragraphs: string[], fullText: string): string {
+  private extractImplications(paragraphs: string[]): string {
     // Implications 通常在 Results 之后
     const keywords = ['implication', 'discussion', 'contribution', 'practical', 'theoretical']
     const startIdx = Math.floor(paragraphs.length * 0.6)
@@ -133,7 +133,7 @@ export class ImprovedAIExtractionService {
     return this.findParagraphWithKeywords(paragraphs, keywords) || 'Not extracted'
   }
 
-  private extractLimitations(paragraphs: string[], fullText: string): string {
+  private extractLimitations(paragraphs: string[]): string {
     // Limitations 通常在论文末尾
     const keywords = ['limitation', 'weakness', 'constraint', 'future research', 'future study']
     
@@ -163,8 +163,8 @@ export class ImprovedAIExtractionService {
     const fallbackText = paragraphs[2]?.substring(0, 200) || paragraphs[0]?.substring(0, 200) || 'Not extracted'
     
     for (const [key, value] of Object.entries(extracted)) {
-      if (!value || value === 'Not extracted' || value.length < 10) {
-        (extracted as any)[key] = fallbackText
+      if (key !== 'customFields' && (!value || value === 'Not extracted' || value.length < 10)) {
+        extracted[key as keyof Omit<ExtractedData, 'customFields'>] = fallbackText
       }
     }
   }

@@ -1,26 +1,23 @@
-import { useState, useEffect } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { 
-  FileText, 
-  Eye, 
-  Download, 
-  Copy, 
-  ExternalLink,
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { type ExtractedData, type Paper } from '@/lib/database'
+import {
   Brain,
-  RefreshCw,
-  Settings,
   ChevronLeft,
   ChevronRight,
+  Copy,
+  ExternalLink,
+  FileText,
+  Maximize2,
+  RefreshCw,
   ZoomIn,
-  ZoomOut,
-  Maximize2
+  ZoomOut
 } from 'lucide-react'
-import { type Paper, type ExtractedData } from '@/lib/database'
+import { useState } from 'react'
 
 interface PaperDetailViewProps {
   paper: Paper | null
@@ -288,7 +285,7 @@ ${(extractedData.limitations as string) || 'Not extracted'}
                       <Brain className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
                       <h3 className="font-semibold mb-2">No Extracted Data</h3>
                       <p className="text-muted-foreground mb-4">
-                        This paper hasn't been processed with AI extraction yet.
+                        This paper hasn&apos;t been processed with AI extraction yet.
                       </p>
                       {aiAvailable && onReExtract && (
                         <Button onClick={() => onReExtract(paperIdStr)}>

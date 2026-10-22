@@ -56,7 +56,8 @@ export function saveAIProviderConfig(config: AIProviderConfig): void {
 
     // Store config
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
-    console.log('AI provider config saved:', config)
+    window.dispatchEvent(new Event('psycscholar-ai-provider-change'))
+    console.log('AI provider config saved:', config.provider)
   } catch (error) {
     console.error('Failed to save AI provider config:', error)
   }

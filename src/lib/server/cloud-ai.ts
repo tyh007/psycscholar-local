@@ -1,5 +1,6 @@
 import { type ExtractedData } from '@/lib/database'
 import { PromptBuilder, type CustomFieldDefinition } from '@/lib/prompt-builder'
+import { getRequestApiKey } from './request-api-key'
 
 const DEFAULT_MODEL = 'gemini-2.0-flash'
 const REQUEST_TIMEOUT_MS = 45000
@@ -28,13 +29,6 @@ export interface CrossPaperInput {
   extractedData: ExtractedData
 }
 
-// Context for user-provided API key (request-scoped)
-let userProvidedApiKey: string | null = null
-
-export function setUserApiKey(apiKey: string | null): void {
-  userProvidedApiKey = apiKey
-}
-
 export class CloudAIError extends Error {
   status?: number
   retryable: boolean
@@ -48,7 +42,7 @@ export class CloudAIError extends Error {
 }
 
 function getApiKey() {
-  // First check if user provided their own API key
+  const userProvidedApiKey = getRequestApiKey()
   if (userProvidedApiKey) {
     return userProvidedApiKey
   }
@@ -269,12 +263,6 @@ function extractWithRules(text: string): ExtractedData {
   const cleanedText = cleanAndNormalizeText(text)
   const dedupedText = deduplicateText(cleanedText)
   
-  const paragraphs = dedupedText
-    .split(/\n\n+/)
-    .map(p => p.trim())
-    .filter(p => p.length > 80)
-    .filter(p => !looksLikeFrontMatter(p))
-
   const abstract = extractAbstractBlock(dedupedText)
 
   const findMultipleSentences = (keywords: string[], count: number = 3) => {
@@ -321,14 +309,6 @@ function looksLikeFrontMatter(paragraph: string) {
     /(university|department|school|college|barcelona|spain|berkeley|london|received|accepted|published|copyright|permission to make)/.test(lower) ||
     /^[A-Z][A-Za-z .,&:-]{0,120}$/.test(paragraph)
   )
-}
-
-function isUsableSectionParagraph(paragraph: string) {
-  const lower = paragraph.toLowerCase()
-  if (/@/.test(paragraph)) return false
-  if (/(university|department|school|college|barcelona|spain|berkeley|london)/.test(lower)) return false
-  if (paragraph.split(/\s+/).length < 18) return false
-  return true
 }
 
 async function callGemini({

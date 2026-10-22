@@ -1,28 +1,27 @@
 "use client"
 
-import { useState, useEffect } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
-import { 
-  Download, 
-  Table, 
-  Code, 
-  BookOpen,
-  Loader2,
-  FileSpreadsheet,
-  FileType
-} from 'lucide-react'
-import * as XLSX from 'xlsx'
-import { jsPDF } from 'jspdf/dist/jspdf.es.min.js'
-import { type Paper, type ExtractedData } from '@/lib/database'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { type Paper } from '@/lib/database'
+import { exportFieldValue as getFieldValue } from '@/lib/export-fields'
 import { type CustomFieldDefinition } from '@/lib/prompt-builder'
+import { jsPDF } from 'jspdf/dist/jspdf.es.min.js'
+import {
+  BookOpen,
+  Code,
+  Download,
+  FileSpreadsheet,
+  FileType,
+  Loader2,
+  Table
+} from 'lucide-react'
+import { useEffect, useState } from 'react'
+import * as XLSX from 'xlsx'
 
 interface ExportDialogProps {
   isOpen: boolean
@@ -72,14 +71,6 @@ export function ExportDialog({ isOpen, onClose, papers, customFields }: ExportDi
     { id: 'implications', label: 'Implications' },
     { id: 'limitations', label: 'Limitations' }
   ]
-
-  const getFieldValue = (paper: Paper, fieldId: string): string => {
-    const ex = paper.extractedData
-    if (!ex) return ''
-    const isCore = coreFields.some(c => c.id === fieldId)
-    if (isCore) return String((ex as unknown as Record<string, unknown>)[fieldId] ?? '')
-    return String(ex.customFields?.[fieldId] ?? '')
-  }
 
   const handlePaperToggle = (paperId: string) => {
     const id = String(paperId)
@@ -176,7 +167,7 @@ export function ExportDialog({ isOpen, onClose, papers, customFields }: ExportDi
         options: exportOptions
       },
       papers: selectedPapersData.map(paper => {
-        const paperData: any = {
+        const paperData: Record<string, unknown> = {
           title: paper.title,
           authors: paper.authors,
           year: paper.year,
@@ -188,7 +179,7 @@ export function ExportDialog({ isOpen, onClose, papers, customFields }: ExportDi
         // Add extracted fields
         if (paper.extractedData) {
           exportOptions.selectedFields.forEach(fieldId => {
-            paperData[fieldId] = (paper.extractedData as any)[fieldId]
+            paperData[fieldId] = getFieldValue(paper, fieldId)
           })
         }
         
@@ -263,8 +254,8 @@ export function ExportDialog({ isOpen, onClose, papers, customFields }: ExportDi
         apa += '--- Key Findings ---\n'
         exportOptions.selectedFields.forEach(fieldId => {
           const field = coreFields.find(f => f.id === fieldId)
-          if (field && (paper.extractedData as any)[fieldId]) {
-            const value = (paper.extractedData as any)[fieldId]
+          if (field && getFieldValue(paper, fieldId)) {
+            const value = getFieldValue(paper, fieldId)
             apa += `**${field.label}:** ${value}\n\n`
           }
         })
@@ -472,7 +463,7 @@ export function ExportDialog({ isOpen, onClose, papers, customFields }: ExportDi
               {/* Format Selection */}
               <div>
                 <Label className="text-sm font-medium mb-3 block">Export Format</Label>
-                <Select value={exportOptions.format} onValueChange={(value: any) => setExportOptions(prev => ({ ...prev, format: value }))}>
+                <Select value={exportOptions.format} onValueChange={(value: ExportOptions['format']) => setExportOptions(prev => ({ ...prev, format: value }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>

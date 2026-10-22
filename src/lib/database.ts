@@ -61,7 +61,7 @@ function toDate(value?: string | Date | null) {
   return value instanceof Date ? value : new Date(value)
 }
 
-function mapProject(project: any): Project {
+function mapProject(project: Omit<Project, 'createdAt' | 'updatedAt'> & { createdAt: string | Date; updatedAt: string | Date }): Project {
   return {
     ...project,
     createdAt: toDate(project.createdAt)!,
@@ -69,7 +69,7 @@ function mapProject(project: any): Project {
   }
 }
 
-function mapPaper(paper: any): Paper {
+function mapPaper(paper: Omit<Paper, 'uploadedAt' | 'processedAt' | 'trashedAt'> & { uploadedAt: string | Date; processedAt?: string | Date; trashedAt?: string | Date }): Paper {
   return {
     ...paper,
     uploadedAt: toDate(paper.uploadedAt)!,
@@ -78,7 +78,7 @@ function mapPaper(paper: any): Paper {
   }
 }
 
-function mapCustomField(field: any): CustomField {
+function mapCustomField(field: Omit<CustomField, 'createdAt'> & { createdAt: string | Date }): CustomField {
   return {
     ...field,
     createdAt: toDate(field.createdAt)!

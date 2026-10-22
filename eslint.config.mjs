@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored PDF.js worker is third-party generated code.
+    "public/pdf.worker.min.js",
   ]),
 ]);
 

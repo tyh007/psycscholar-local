@@ -1,28 +1,27 @@
-import { useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Textarea } from '@/components/ui/textarea'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
-import { 
+import { Textarea } from '@/components/ui/textarea'
+import { aiExtractionService } from '@/lib/ai-extraction'
+import { type ExtractedData, type Paper } from '@/lib/database'
+import {
   ArrowLeftRight,
-  BarChart3, 
-  Brain, 
-  FileText, 
-  Lightbulb,
-  Loader2,
+  BarChart3,
+  Brain,
   Copy,
   Download,
+  FileText,
+  Lightbulb,
+  Loader2,
+  Target,
   TrendingUp,
-  Users,
-  Target
+  Users
 } from 'lucide-react'
-import { type Paper, type ExtractedData } from '@/lib/database'
-import { aiExtractionService } from '@/lib/ai-extraction'
+import { useState } from 'react'
 
 interface CrossPaperAnalysisProps {
   isOpen: boolean

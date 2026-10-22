@@ -1,11 +1,10 @@
-import { type ExtractedPaperData } from '@/lib/ai-extraction-types'
-import { extractPaperWithRules, extractPaperWithLocalOllama } from '@/lib/local-ollama-ai'
-import { getAIProviderConfig, getGeminiApiKey } from '@/lib/ai-provider-config'
+import { type ExtractedPaperData } from '@/lib/ai-extraction-types';
+import { getAIProviderConfig, getGeminiApiKey } from '@/lib/ai-provider-config';
+import { extractPaperWithLocalOllama, extractPaperWithRules } from '@/lib/local-ollama-ai';
 
 class UnifiedExtractionService {
   async extractWithFallback(
-    text: string,
-    context?: { title?: string; abstract?: string }
+    text: string
   ): Promise<{ data: ExtractedPaperData; method: string; userApiKey?: boolean }> {
     const aiConfig = getAIProviderConfig()
     
